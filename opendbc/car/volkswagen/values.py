@@ -1,6 +1,7 @@
 from collections import defaultdict, namedtuple
 from dataclasses import dataclass, field
-from enum import Enum, IntFlag, StrEnum
+from enum import Enum, IntFlag
+from opendbc.car import StrEnum
 
 from opendbc.car import Bus, CarSpecs, DbcDict, PlatformConfig, Platforms, uds
 from opendbc.can.can_define import CANDefine
