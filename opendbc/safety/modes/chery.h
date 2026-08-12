@@ -17,8 +17,26 @@
 // feed the camera our own spoofed copies instead, so the hands-on-wheel detector
 // sees pinned "driver-on-wheel" torque values.
 #define CHERY_EPS            0x1D3U  // DRIVER_TORQUE, STEERING_ANGLE — spoofed on bus 2
-#define CHERY_WHEELSPEED_2   0x313U  // 787 — WHEEL_FL / WHEEL_FR for standstill pre-arm
+#define CHERY_STEER_RELATED  0xC4U   // 196 — iCaur's real road angle (J7/Omoda: status code, not used here)
+#define CHERY_WHEELSPEED_2   0x313U  // 787 — WHEEL_FL / WHEEL_FR for standstill pre-arm + speed
 #define CHERY_ICAUR_WHEELSPEED_A 0x222U  // 546 — iCaur FL/FR on PT bus 0
+
+// LANE_KEEP steering backstop, mirrors opendbc/car/chery/values.py's
+// CarControllerParams exactly (STEER_ANGLE_MAX=120, LANE_KEEP_STEP=2 @
+// DT_CTRL=0.01 -> 50 Hz). angle_deg_to_can=10 matches STEER_CMD_ANGLE's own
+// DBC scale (0.1 deg/count), so desired_angle in chery_tx_hook needs no
+// float math - it's the raw extracted count directly. kommuai's own
+// chery_tx_hook had no independent angle/rate enforcement at all (relied
+// solely on the Python controller); bit-extraction formulas below were
+// verified against opendbc's own DBC codec (opendbc.can.packer/parser)
+// before being written here, not hand-derived from the DBC text.
+static const AngleSteeringLimits CHERY_STEERING_LIMITS = {
+  .max_angle = 1200,
+  .angle_deg_to_can = 10,
+  .angle_rate_up_lookup = {{0., 5., 15.}, {50., 40., 25.}},
+  .angle_rate_down_lookup = {{0., 5., 15.}, {60., 50., 30.}},
+  .frequency = 50U,
+};
 
 // True when FL/FR wheel speeds are near zero; used to pre-arm PT->cam torque blocks
 // while parked (matches CarController cam_spoof at standstill).
@@ -42,6 +60,8 @@ static void chery_rx_hook(const CANPacket_t *msg) {
     const uint16_t fl = (uint16_t)(((uint16_t)msg->data[0] << 8U) | msg->data[1]);
     const uint16_t fr = (uint16_t)(((uint16_t)msg->data[2] << 8U) | msg->data[3]);
     chery_vehicle_stopped = (fl < 100U) && (fr < 100U);  // < 1 kph
+    const float speed = (((float)fl + (float)fr) * 0.5f) * 0.01f / 3.6f;  // kph/count -> m/s
+    UPDATE_VEHICLE_SPEED(speed);
   }
 
   // iCaur: ICAUR_WHEELSPEED_A 0x222 — 13-bit motorola FL/FR (byteN + top5 of byteN+1).
@@ -49,6 +69,23 @@ static void chery_rx_hook(const CANPacket_t *msg) {
     const uint16_t fl = ((uint16_t)msg->data[0] << 5U) | ((uint16_t)msg->data[1] >> 3U);
     const uint16_t fr = ((uint16_t)msg->data[2] << 5U) | ((uint16_t)msg->data[3] >> 3U);
     chery_vehicle_stopped = (fl < 480U) && (fr < 480U);  // ~ old 8-bit byte < 15
+    // Same GPS-origin-fit factor (~0.01756 m/s/count) CarState uses for this platform.
+    const float speed = (((float)fl + (float)fr) * 0.5f) * 0.01756f;
+    UPDATE_VEHICLE_SPEED(speed);
+  }
+
+  // EPS.STEERING_ANGLE 7|14@0+ (0.1,-780.1) - J7/Omoda/Tiggo measured angle.
+  // Raw count minus 7801 is already in 0.1 deg/count units (angle_deg_to_can).
+  if (!chery_icaur_safety && (msg->addr == CHERY_EPS) && (msg->bus == 0U) && (GET_LEN(msg) >= 2U)) {
+    const int raw = (int)(((uint16_t)msg->data[0] << 6U) | ((uint16_t)msg->data[1] >> 2U));
+    update_sample(&angle_meas, raw - 7801);
+  }
+
+  // STEER_RELATED.STEERING_ANGLE 7|16@0+ (0.06,-1966) - iCaur's real road angle.
+  // Converted to 0.1 deg/count units (*0.6) via integer math: (raw*3)/5 - 19660.
+  if (chery_icaur_safety && (msg->addr == CHERY_STEER_RELATED) && (msg->bus == 0U) && (GET_LEN(msg) >= 2U)) {
+    const int raw = (int)(((uint16_t)msg->data[0] << 8U) | msg->data[1]);
+    update_sample(&angle_meas, ((raw * 3) / 5) - 19660);
   }
 }
 
@@ -60,14 +97,17 @@ static safety_config chery_init(uint16_t param) {
   static RxCheck chery_rx_checks_j7[] = {
     {.msg = {{CHERY_HUD, 2U, 8U, 20U, .ignore_checksum = true, .ignore_counter = true, .ignore_quality_flag = true}, {0}, {0}}},
     {.msg = {{CHERY_WHEELSPEED_2, 0U, 8U, 50U, .ignore_checksum = true, .ignore_counter = true, .ignore_quality_flag = true}, {0}, {0}}},
+    {.msg = {{CHERY_EPS, 0U, 8U, 100U, .ignore_checksum = true, .ignore_counter = true, .ignore_quality_flag = true}, {0}, {0}}},
   };
   static RxCheck chery_rx_checks_omoda[] = {
     {.msg = {{CHERY_HUD, 0U, 8U, 20U, .ignore_checksum = true, .ignore_counter = true, .ignore_quality_flag = true}, {0}, {0}}},
     {.msg = {{CHERY_WHEELSPEED_2, 0U, 8U, 50U, .ignore_checksum = true, .ignore_counter = true, .ignore_quality_flag = true}, {0}, {0}}},
+    {.msg = {{CHERY_EPS, 0U, 8U, 100U, .ignore_checksum = true, .ignore_counter = true, .ignore_quality_flag = true}, {0}, {0}}},
   };
   static RxCheck chery_rx_checks_icaur[] = {
     {.msg = {{CHERY_HUD, 2U, 8U, 20U, .ignore_checksum = true, .ignore_counter = true, .ignore_quality_flag = true}, {0}, {0}}},
     {.msg = {{CHERY_ICAUR_WHEELSPEED_A, 0U, 8U, 50U, .ignore_checksum = true, .ignore_counter = true, .ignore_quality_flag = true}, {0}, {0}}},
+    {.msg = {{CHERY_STEER_RELATED, 0U, 8U, 100U, .ignore_checksum = true, .ignore_counter = true, .ignore_quality_flag = true}, {0}, {0}}},
   };
   static const CanMsg CHERY_TX_MSGS[] = {
     {CHERY_LANE_KEEP, 0, 8, .check_relay = false},
@@ -92,8 +132,18 @@ static safety_config chery_init(uint16_t param) {
 }
 
 static bool chery_tx_hook(const CANPacket_t *msg) {
-  SAFETY_UNUSED(msg);
-  return true;
+  bool violation = false;
+
+  if (msg->addr == CHERY_LANE_KEEP) {
+    // STEER_CMD_ANGLE 7|14@0+ (0.1,-780.1): raw count minus 7801 is directly
+    // in CHERY_STEERING_LIMITS.angle_deg_to_can (0.1 deg/count) units.
+    const int raw = (int)(((uint16_t)msg->data[0] << 6U) | ((uint16_t)msg->data[1] >> 2U));
+    const int desired_angle = raw - 7801;
+    const bool steer_req = GET_BIT(msg, 9U);
+    violation |= steer_angle_cmd_checks(desired_angle, steer_req, CHERY_STEERING_LIMITS);
+  }
+
+  return !violation;
 }
 
 static bool chery_fwd_hook(int bus_num, int addr) {
