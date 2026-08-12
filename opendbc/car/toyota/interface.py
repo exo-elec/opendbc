@@ -54,6 +54,15 @@ class CarInterface(CarInterfaceBase):
     # In TSS2 cars, the camera does long control
     found_ecus = [fw.ecu for fw in car_fw]
 
+    # Ported from dev/EDP10: on older TSS-P Toyotas, the DSU (Driving Support ECU) can be physically
+    # disconnected to give openpilot longitudinal control (see STATIC_DSU_MSGS in values.py and its
+    # use in carcontroller.py). This is a real, opt-in safety tradeoff: it disables the car's stock AEB,
+    # which normally comes from the DSU. Only offered on platforms that actually have a DSU to unplug
+    # (excludes NO_DSU/UNSUPPORTED_DSU platforms, which never had one or use an unsupported variant),
+    # and only detected when fingerprinting doesn't find a live DSU ECU responding on the bus.
+    ret.deprecated.enableDsu = len(found_ecus) > 0 and Ecu.dsu not in found_ecus and \
+      not (ret.flags & (ToyotaFlags.NO_DSU | ToyotaFlags.UNSUPPORTED_DSU))
+
     if Ecu.hybrid in found_ecus:
       ret.flags |= ToyotaFlags.HYBRID.value
 
@@ -97,11 +106,13 @@ class CarInterface(CarInterfaceBase):
         ret.flags |= ToyotaFlags.DISABLE_RADAR.value
 
     # openpilot longitudinal enabled by default:
+    #  - cars w/ DSU disconnected
     #  - TSS2 cars with camera sending ACC_CONTROL where we can block it
     # openpilot longitudinal behind alpha long toggle:
     #  - TSS2 radar ACC cars (disables radar)
 
-    ret.openpilotLongitudinalControl = ((bool(ret.flags & ToyotaFlags.TSS2) and not (ret.flags & ToyotaFlags.RADAR_ACC)) or
+    ret.openpilotLongitudinalControl = (ret.deprecated.enableDsu or
+                                        (bool(ret.flags & ToyotaFlags.TSS2) and not (ret.flags & ToyotaFlags.RADAR_ACC)) or
                                         bool(ret.flags & ToyotaFlags.DISABLE_RADAR.value))
 
     ret.autoResumeSng = ret.openpilotLongitudinalControl

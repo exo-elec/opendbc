@@ -1,6 +1,7 @@
 import math
 import numpy as np
 from opendbc.car import Bus, make_tester_present_msg, rate_limit, structs, ACCELERATION_DUE_TO_GRAVITY, DT_CTRL
+from opendbc.car.can_definitions import CanData
 from opendbc.car.lateral import apply_meas_steer_torque_limits, apply_std_steer_angle_limits, common_fault_avoidance
 from opendbc.car.carlog import carlog
 from opendbc.car.common.filter_simple import FirstOrderFilter, HighPassFilter
@@ -8,7 +9,7 @@ from opendbc.car.common.pid import PIDController
 from opendbc.car.secoc import add_mac, build_sync_mac
 from opendbc.car.interfaces import CarControllerBase
 from opendbc.car.toyota import toyotacan
-from opendbc.car.toyota.values import CAR, CarControllerParams, ToyotaFlags
+from opendbc.car.toyota.values import CAR, STATIC_DSU_MSGS, CarControllerParams, ToyotaFlags
 from opendbc.can import CANPacker
 
 Ecu = structs.CarParams.Ecu
@@ -291,8 +292,18 @@ class CarController(CarControllerBase):
                                                      hud_control.rightLaneVisible, hud_control.leftLaneDepart,
                                                      hud_control.rightLaneDepart, CC.enabled, CS.lkas_hud))
 
-      if (self.frame % 100 == 0 or send_ui) and self.CP.flags & ToyotaFlags.DISABLE_RADAR.value:
+      # stock FCW is unavailable both when the radar is disabled (DISABLE_RADAR) and when the
+      # DSU that would otherwise send it has been physically unplugged (enableDsu)
+      if (self.frame % 100 == 0 or send_ui) and (self.CP.deprecated.enableDsu or self.CP.flags & ToyotaFlags.DISABLE_RADAR.value):
         can_sends.append(toyotacan.create_fcw_command(self.packer, fcw_alert))
+
+    # *** static msgs ***
+    # with the DSU disconnected, replay the CAN messages it would normally send so the rest of the
+    # car's CAN network (radar, PCS/AEB HUD, etc.) doesn't fault from its absence
+    if self.CP.deprecated.enableDsu:
+      for addr, cars, bus, fr_step, vl in STATIC_DSU_MSGS:
+        if self.frame % fr_step == 0 and self.CP.carFingerprint in cars:
+          can_sends.append(CanData(addr, vl, bus))
 
     # keep radar disabled
     if self.frame % 20 == 0 and self.CP.flags & ToyotaFlags.DISABLE_RADAR.value:
