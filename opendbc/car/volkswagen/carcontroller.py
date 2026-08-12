@@ -59,6 +59,10 @@ class CarController(CarControllerBase):
     self.distance_bar_frame = 0
     self.gra_acc_counter_last = None
     self.hca_mitigation = HCAMitigation(self.CCP)
+    # PQ EPS racks accept either 5 or 7 as an enabled HCA_Status; default 5, opt-in
+    # to legacy 7 via VolkswagenFlags.PQSteeringPatch (see values.py). No-op on
+    # MQB/MLB, which hardcode their own active value regardless of this flag.
+    self.pq_hca_active_value = 7 if CP.flags & VolkswagenFlags.PQSteeringPatch else 5
 
   def update(self, CC, CS, now_nanos):
     actuators = CC.actuators
@@ -111,7 +115,7 @@ class CarController(CarControllerBase):
         apply_torque = self.hca_mitigation.update(apply_torque, self.apply_torque_last)
         hca_enabled = apply_torque != 0
         self.apply_torque_last = apply_torque
-        can_sends.append(self.CCS.create_steering_control(self.packer_pt, self.CAN.pt, apply_torque, hca_enabled))
+        can_sends.append(self.CCS.create_steering_control(self.packer_pt, self.CAN.pt, apply_torque, hca_enabled, self.pq_hca_active_value))
 
       if self.CP.flags & VolkswagenFlags.STOCK_HCA_PRESENT:
         # Pacify VW Emergency Assist driver inactivity detection by changing its view of driver steering input torque

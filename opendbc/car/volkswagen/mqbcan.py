@@ -1,7 +1,8 @@
 from opendbc.car.crc import CRC8H2F
 
 
-def create_steering_control(packer, bus, apply_torque, lkas_enabled):
+def create_steering_control(packer, bus, apply_torque, lkas_enabled, hca_active_value=5):
+  # hca_active_value: unused on MQB (always 5), accepted for call-site parity with pqcan
   values = {
     "HCA_01_Status_HCA": 5 if lkas_enabled else 3,
     "HCA_01_LM_Offset": abs(apply_torque),
