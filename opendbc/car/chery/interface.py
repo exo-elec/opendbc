@@ -1,3 +1,15 @@
+"""Chery/Omoda/iCAUR/JAECOO interface: ported from bukapilot/kommuai onto this fork's
+opendbc core, 2026-08. Angle control only (no torque platform seen yet). Steering
+enforcement in opendbc/safety/modes/chery.h adds a from-scratch max-angle speed-zone
+backstop (see CHERY_ZONE_ANGLE_DEG there) - kommuai's source had rate tapering only,
+no angle backstop; this fork's version derives the taper from real per-model
+wheelbase/steerRatio (opendbc/car/chery/values.py CarSpecs) via the same ISO ~1.3g
+lateral-accel-margin physics BYD's own zone table uses, using Omoda 5's smaller
+wheelbase for a conservative bound shared across platforms.
+CAR.CHERY_ICAUR_03 naming is unconfirmed for the Thailand market (V23 badge is the
+only source verified so far) - do not treat the enum name as a confirmed market name.
+"""
+
 from opendbc.car import get_safety_config, structs
 from opendbc.car.interfaces import CarInterfaceBase
 from opendbc.car.chery.carcontroller import CarController

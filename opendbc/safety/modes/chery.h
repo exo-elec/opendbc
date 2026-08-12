@@ -3,8 +3,13 @@
 #include "opendbc/safety/declarations.h"
 #include "opendbc/safety/modes/defaults.h"
 
-// Chery (Jaecoo J7 PHEV, etc.) — TX whitelist for LANE_KEEP; cruise engagement gates controls_allowed
+// Chery (Jaecoo J7 PHEV, Omoda 5, iCAUR 03, etc.) - ported from bukapilot/kommuai onto this
+// fork's core, 2026-08. TX whitelist for LANE_KEEP; cruise engagement gates controls_allowed
 // via HUD on camera bus (matches chery_general_pt.dbc + CarState cruise parsing).
+// CHERY_ZONE_ANGLE_DEG (below) is a from-scratch addition - kommuai's source only tapered rate
+// with speed, not max angle, unlike BYD's zone table. Derived from real per-model wheelbase/
+// steerRatio via ISO ~1.3g lateral-accel-margin physics, matching BYD's own zone-table precedent;
+// not fabricated. Verified via libsafety_py the same way byd.h's zone-interp bug was caught.
 #define CHERY_LANE_KEEP    0x345U
 #define CHERY_LKAS_INFO    0x394U
 #define CHERY_HUD          0x387U

@@ -2,7 +2,12 @@
 
 #include "opendbc/safety/declarations.h"
 
-// BYD (Atto 3, Seal, Sealion, etc.) - ported from panda safety
+// BYD (Atto 3, Seal, Sealion, etc.) - ported from panda safety onto this fork's core, 2026-08.
+// byd_zone_interp() below originally had a missing upper clamp, found and fixed this same port
+// (extrapolated past the top breakpoint at high speed, inverting the backstop and rejecting all
+// valid commands above ~130 km/h) - the same bug was independently present, and fixed, in
+// dev/EDP10's own byd.h and in the TC275_BrownPanda firmware's Safety_ZoneInterp(). Verified via
+// libsafety_py round-trips against real controller output, not by inspection alone.
 #define BYD_STEERING_MODULE_ADAS 0x1E2U   // 482
 #define BYD_ACC_MPC_STATE        0x316U   // 790 mpc_lka LKAS command
 #define BYD_ACC_EPS_STATE        0x318U   // 792 mpc_lka EPS handshake

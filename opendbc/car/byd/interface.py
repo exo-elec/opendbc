@@ -1,3 +1,13 @@
+"""BYD interface: ported from bukapilot/dragonpilot (cam_lka/mpc_lka split, per-platform
+safetyParam selection) onto this fork's opendbc core, 2026-08. Steering enforcement lives
+in opendbc/safety/modes/byd.h (steer_angle_cmd_checks_vm + zone-LUT backstop with both-end
+clamping - see byd.h's own header comment for the interpolation bug found and fixed during
+this port). Atto 3/M6/Seal6 use angle control; the MPC_LKA platforms (Song Plus DM-i 21,
+etc.) use torque control via a separate LKAS command path - see PLATFORM_MPC_LKA in values.py.
+Constants (wheelSpeedFactor, torque tuning) are carried over verbatim from the source forks,
+not re-derived; treat them as community-sourced until validated against real vehicles.
+"""
+
 from opendbc.car import get_safety_config, structs
 from opendbc.car.interfaces import CarInterfaceBase
 from opendbc.car.byd.cam_lka.carcontroller import CarController as CamLkaCarController
