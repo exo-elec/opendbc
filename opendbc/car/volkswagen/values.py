@@ -230,6 +230,13 @@ class VolkswagenFlags(IntFlag):
   MLB = 8
   MEB = 16
   MEB_GEN2 = 128
+  # Opt-in: PQ EPS racks accept either 5 or 7 as an enabled HCA_Status (see
+  # opendbc/safety/modes/volkswagen_pq.h / test_torque_cmd_enable_variants), with
+  # different low-speed tuning behavior. Ported from dev/EDP10 (originally
+  # dragonpilot's DPFlags.VAGPQSteeringPatch); this fork has no user-toggle/params
+  # plumbing into opendbc, so unlike EDP10 this flag is only settable directly on
+  # CarParams.flags by whatever sets PQ/MLB/MEB today.
+  PQSteeringPatch = 256
 
 
 @dataclass
