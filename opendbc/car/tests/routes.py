@@ -50,7 +50,7 @@ non_tested_cars = [
   CHERY.CHERY_JAECOO_J7_PHEV,
   CHERY.CHERY_TIGGO_8_PRO,
   CHERY.CHERY_OMODA_5,
-  CHERY.CHERY_ICAUR_03,
+  CHERY.CHERY_JAECOO_6T,
 
   # MG ZS (no comma.ai test route yet; no CAN/FW fingerprint either - forced
   # selection only, see opendbc/car/mg/fingerprints.py)

@@ -202,7 +202,7 @@ class CarController(CarControllerBase):
 
     # Omoda never uses the Jaecoo RES/SET standstill alternation — only pcmDisable recovery above.
     # iCaur has no PCM_BUTTONS (0x360) on the bus — do not inject Jaecoo button frames.
-    if omoda or self.CP.carFingerprint == CAR.CHERY_ICAUR_03:
+    if omoda or self.CP.carFingerprint == CAR.CHERY_JAECOO_6T:
       return
 
     hard_disarm = self.CP.openpilotLongitudinalControl or not self.acc_armed
@@ -230,7 +230,7 @@ class CarController(CarControllerBase):
     fp = self.CP.carFingerprint
     return (
       (fp == CAR.CHERY_OMODA_5 and OMODA_DISABLE_TORQUE_SPOOF) or
-      (fp == CAR.CHERY_ICAUR_03 and ICAUR_DISABLE_TORQUE_SPOOF)
+      (fp == CAR.CHERY_JAECOO_6T and ICAUR_DISABLE_TORQUE_SPOOF)
     )
 
   def _cam_torque_spoof_active(self, CS) -> bool:
@@ -250,7 +250,7 @@ class CarController(CarControllerBase):
     cam_spoof = self._cam_torque_spoof_active(CS)
 
     lat_active = CC.latActive and not CS.out.standstill
-    icaur = self.CP.carFingerprint == CAR.CHERY_ICAUR_03
+    icaur = self.CP.carFingerprint == CAR.CHERY_JAECOO_6T
     if icaur:
       driver_over = self._update_icaur_steer_override(CS, lat_active, CC.actuators.steeringAngleDeg)
     else:
@@ -285,7 +285,7 @@ class CarController(CarControllerBase):
 
     if self.frame % HUD_STEP == 0 and not (
         (self.CP.carFingerprint == CAR.CHERY_OMODA_5 and OMODA_DISABLE_HUD_OVERRIDE) or
-        (self.CP.carFingerprint == CAR.CHERY_ICAUR_03 and ICAUR_DISABLE_HUD_OVERRIDE)
+        (self.CP.carFingerprint == CAR.CHERY_JAECOO_6T and ICAUR_DISABLE_HUD_OVERRIDE)
     ):
       can_sends.append(cherycan.create_hud_override(self.packer, CS.cam_hud, self.hud_counter))
       self.hud_counter = (self.hud_counter + 1) % 16

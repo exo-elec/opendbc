@@ -205,9 +205,9 @@ class CAR(Platforms):
     CarSpecs(mass=1420.0, wheelbase=2.63, steerRatio=16.0),
     dbc_dict("chery_general_pt", None),
   )
-  CHERY_ICAUR_03 = PlatformConfig(
+  CHERY_JAECOO_6T = PlatformConfig(
     [CarDocs(
-      "iCaur 03 2024-26", "ALL",
+      "Jaecoo 6T 2024-26", "ALL",
       car_parts=CUSTOM_CAR_PARTS(),
       footnotes=[Footnote.J7_NOTE],
       variant="All",

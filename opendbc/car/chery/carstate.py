@@ -58,7 +58,7 @@ class CarState(CarStateBase):
     cp, cam = can_parsers[Bus.pt], can_parsers[Bus.cam]
     ret = structs.CarState()
     omoda = self.CP.carFingerprint == CAR.CHERY_OMODA_5
-    icaur = self.CP.carFingerprint == CAR.CHERY_ICAUR_03
+    icaur = self.CP.carFingerprint == CAR.CHERY_JAECOO_6T
 
     # --- Wheels / pedals / gear ---
     if icaur:
@@ -201,7 +201,7 @@ class CarState(CarStateBase):
   def get_can_parser(CP):
     if CP.carFingerprint == CAR.CHERY_OMODA_5:
       msgs = OMODA_PT_PARSER_MSGS
-    elif CP.carFingerprint == CAR.CHERY_ICAUR_03:
+    elif CP.carFingerprint == CAR.CHERY_JAECOO_6T:
       msgs = ICAUR_PT_PARSER_MSGS
     else:
       msgs = PT_PARSER_MSGS
@@ -211,7 +211,7 @@ class CarState(CarStateBase):
   def get_cam_can_parser(CP):
     if CP.carFingerprint == CAR.CHERY_OMODA_5:
       msgs = OMODA_CAM_PARSER_MSGS
-    elif CP.carFingerprint == CAR.CHERY_ICAUR_03:
+    elif CP.carFingerprint == CAR.CHERY_JAECOO_6T:
       msgs = ICAUR_CAM_PARSER_MSGS
     else:
       msgs = CAM_PARSER_MSGS

@@ -6,8 +6,10 @@ no angle backstop; this fork's version derives the taper from real per-model
 wheelbase/steerRatio (opendbc/car/chery/values.py CarSpecs) via the same ISO ~1.3g
 lateral-accel-margin physics BYD's own zone table uses, using Omoda 5's smaller
 wheelbase for a conservative bound shared across platforms.
-CAR.CHERY_ICAUR_03 naming is unconfirmed for the Thailand market (V23 badge is the
-only source verified so far) - do not treat the enum name as a confirmed market name.
+CAR.CHERY_JAECOO_6T: renamed 2026-08-12 from CHERY_ICAUR_03. iCAUR badging isn't sold
+in Thailand; this model is badged Jaecoo 6T there (Jaecoo 6 base / Jaecoo 6T REEV
+range-extended variant) - confirmed via paultan.org/autobuzz.my coverage. Chery's V23
+is a distinct, smaller model (186mm shorter), not this car under a different name.
 """
 
 from opendbc.car import get_safety_config, structs
@@ -48,7 +50,7 @@ class CarInterface(CarInterfaceBase):
       ret.safetyConfigs[0].safetyParam = CHERY_OMODA_SAFETY_PARAM
       if OMODA_DISABLE_TORQUE_SPOOF:
         ret.safetyConfigs[0].safetyParam |= CHERY_OMODA_NO_TORQUE_SPOOF_PARAM
-    elif candidate == CAR.CHERY_ICAUR_03:
+    elif candidate == CAR.CHERY_JAECOO_6T:
       ret.safetyConfigs[0].safetyParam = CHERY_ICAUR_SAFETY_PARAM
       if ICAUR_DISABLE_TORQUE_SPOOF:
         ret.safetyConfigs[0].safetyParam |= CHERY_OMODA_NO_TORQUE_SPOOF_PARAM
