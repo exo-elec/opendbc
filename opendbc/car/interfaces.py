@@ -1,3 +1,4 @@
+import json
 import os
 import numpy as np
 import time
@@ -7,7 +8,7 @@ except ImportError:  # Python 3.10
   import tomli as tomllib
 from abc import abstractmethod, ABC
 from opendbc.car import StrEnum
-from typing import Any
+from typing import Any, NamedTuple
 from collections.abc import Callable
 from functools import cache
 
@@ -46,6 +47,23 @@ GEAR_SHIFTER_MAP: dict[str, structs.CarState.GearShifter] = {
 
 TorqueFromLateralAccelCallbackType = Callable[[float, structs.CarParams.LateralTorqueTuning], float]
 LateralAccelFromTorqueCallbackType = Callable[[float, structs.CarParams.LateralTorqueTuning], float]
+
+
+class LatControlInputs(NamedTuple):
+  lateral_acceleration: float
+  roll_compensation: float
+  vego: float
+  aego: float
+
+
+# Richer neural-FF path: opt-in only, does not replace torque_from_lateral_accel above.
+# Ported from dev/EDP10 (originally dragonpilot); roll_compensation isn't derivable from
+# CarState alone, so this can't reuse the existing 2-arg callback - callers must be
+# updated to supply LatControlInputs to use it. Brands without a neural model return
+# None from torque_from_lateral_accel_neural_fn() (the CarInterfaceBase default below),
+# so existing callers (e.g. EOP10/NGP10's latcontrol_torque.py) that only know about
+# torque_from_lateral_accel()/lateral_accel_from_torque() are completely unaffected.
+NeuralFFCallbackType = Callable[['LatControlInputs', structs.CarParams.LateralTorqueTuning, bool], float]
 
 
 @cache
@@ -191,6 +209,11 @@ class CarInterfaceBase(ABC):
 
   def lateral_accel_from_torque(self) -> LateralAccelFromTorqueCallbackType:
     return self.lateral_accel_from_torque_linear
+
+  def torque_from_lateral_accel_neural_fn(self) -> NeuralFFCallbackType | None:
+    # Base default: no neural FF model. Override in a brand's interface.py to opt in
+    # (see gm/interface.py's CHEVROLET_BOLT_EUV). Callers must check for None before use.
+    return None
 
   # returns a set of default params to avoid repetition in car specific params
   @staticmethod
@@ -404,3 +427,38 @@ def get_interface_attr(attr: str, combine_brands: bool = False, ignore_none: boo
       pass
 
   return result
+
+
+class NanoFFModel:
+  """Small MLP predictor for the opt-in neural torque-from-lateral-accel path
+  (see torque_from_lateral_accel_neural_fn above). Ported verbatim from dev/EDP10."""
+
+  def __init__(self, weights_loc: str, platform: str):
+    self.weights_loc = weights_loc
+    self.platform = platform
+    self.load_weights(platform)
+
+  def load_weights(self, platform: str):
+    with open(self.weights_loc) as fob:
+      self.weights = {k: np.array(v) for k, v in json.load(fob)[platform].items()}
+
+  def relu(self, x: np.ndarray):
+    return np.maximum(0.0, x)
+
+  def forward(self, x: np.ndarray):
+    assert x.ndim == 1
+    x = (x - self.weights['input_norm_mat'][:, 0]) / (self.weights['input_norm_mat'][:, 1] - self.weights['input_norm_mat'][:, 0])
+    x = self.relu(np.dot(x, self.weights['w_1']) + self.weights['b_1'])
+    x = self.relu(np.dot(x, self.weights['w_2']) + self.weights['b_2'])
+    x = self.relu(np.dot(x, self.weights['w_3']) + self.weights['b_3'])
+    x = np.dot(x, self.weights['w_4']) + self.weights['b_4']
+    return x
+
+  def predict(self, x: list[float], do_sample: bool = False):
+    x = self.forward(np.array(x))
+    if do_sample:
+      pred = np.random.laplace(x[0], np.exp(x[1]) / self.weights['temperature'])
+    else:
+      pred = x[0]
+    pred = pred * (self.weights['output_norm_mat'][1] - self.weights['output_norm_mat'][0]) + self.weights['output_norm_mat'][0]
+    return pred
