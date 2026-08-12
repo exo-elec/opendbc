@@ -1,14 +1,17 @@
 #!/usr/bin/env python3
+import os
 from math import fabs, exp
 import numpy as np
 
 from opendbc.car import get_safety_config, structs
+from opendbc.car.common.basedir import BASEDIR
 from opendbc.car.common.conversions import Conversions as CV
 from opendbc.car.gm.carcontroller import CarController
 from opendbc.car.gm.carstate import CarState
 from opendbc.car.gm.radar_interface import RadarInterface, RADAR_HEADER_MSG, CAMERA_DATA_HEADER_MSG
 from opendbc.car.gm.values import CAR, CarControllerParams, EV_CAR, CAMERA_ACC_CAR, SDGM_CAR, ALT_ACCS, CanBus, GMSafetyFlags
-from opendbc.car.interfaces import CarInterfaceBase, TorqueFromLateralAccelCallbackType, LateralAccelFromTorqueCallbackType
+from opendbc.car.interfaces import (CarInterfaceBase, TorqueFromLateralAccelCallbackType, LateralAccelFromTorqueCallbackType,
+                                    NeuralFFCallbackType, LatControlInputs, NanoFFModel)
 
 TransmissionType = structs.CarParams.TransmissionType
 NetworkLocation = structs.CarParams.NetworkLocation
@@ -18,6 +21,8 @@ NON_LINEAR_TORQUE_PARAMS = {
   CAR.GMC_ACADIA: [4.78003305, 1.0, 0.3122, 0.05591772],
   CAR.CHEVROLET_SILVERADO: [3.29974374, 1.0, 0.25571356, 0.0465122]
 }
+
+NEURAL_FF_WEIGHTS_PATH = os.path.join(BASEDIR, 'torque_data/neural_ff_weights.json')
 
 
 class CarInterface(CarInterfaceBase):
@@ -83,6 +88,25 @@ class CarInterface(CarInterfaceBase):
       return lateral_accel_from_torque_siglin
     else:
       return self.lateral_accel_from_torque_linear
+
+  def torque_from_lateral_accel_neural_fn(self) -> NeuralFFCallbackType | None:
+    # Opt-in only (see CarInterfaceBase.torque_from_lateral_accel_neural_fn's docstring) -
+    # does not change torque_from_lateral_accel()/lateral_accel_from_torque() above, which
+    # keep using the siglin curve for Bolt EUV exactly as before. Ported from dev/EDP10;
+    # real trained weights in opendbc/car/torque_data/neural_ff_weights.json, copied
+    # verbatim (not a placeholder).
+    if self.CP.carFingerprint != CAR.CHEVROLET_BOLT_EUV:
+      return None
+    if getattr(self, '_neural_ff_model', None) is None:
+      self._neural_ff_model = NanoFFModel(NEURAL_FF_WEIGHTS_PATH, self.CP.carFingerprint)
+
+    def torque_from_lateral_accel_neural(latcontrol_inputs: LatControlInputs, torque_params: structs.CarParams.LateralTorqueTuning,
+                                         gravity_adjusted: bool) -> float:
+      inputs = list(latcontrol_inputs)
+      if gravity_adjusted:
+        inputs[0] += inputs[1]
+      return float(self._neural_ff_model.predict(inputs))
+    return torque_from_lateral_accel_neural
 
   @staticmethod
   def _get_params(ret: structs.CarParams, candidate, fingerprint, car_fw, alpha_long, is_release, docs) -> structs.CarParams:
