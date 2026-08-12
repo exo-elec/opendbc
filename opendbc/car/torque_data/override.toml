@@ -1,4 +1,9 @@
 legend = ["LAT_ACCEL_FACTOR", "MAX_LAT_ACCEL_MEASURED", "FRICTION"]
+
+# MG ZS - real tuned values from dragonpilot's own override.toml (the source
+# this port came from), not a substitute or guess.
+"MG_ZS" = [1.2, 2.5, 0.18]
+
 ### angle control
 # Nissan appears to have torque
 "NISSAN_XTRAIL" = [nan, 1.5, nan]
