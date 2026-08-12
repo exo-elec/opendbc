@@ -13,11 +13,11 @@ FINGERPRINTS = {
       196: 8, 276: 8, 291: 8, 306: 8, 325: 8, 330: 8, 533: 8, 546: 8, 547: 8, 548: 8, 549: 8, 550: 8, 554: 8, 555: 8, 556: 8, 561: 8, 564: 8, 568: 8, 569: 8, 581: 8, 597: 8, 625: 8, 657: 8, 659: 8, 665: 8, 775: 8, 789: 8, 804: 8, 816: 8, 837: 8, 850: 8, 852: 8, 853: 8, 903: 8, 930: 8, 933: 8, 938: 8, 950: 8, 988: 8, 990: 8, 1005: 8, 1018: 8, 1020: 8, 1192: 8, 1245: 8, 1251: 8, 1335: 8, 1536: 8
   }],
 }
-# KNOWN GAP (inherited from source, not yet resolved): byte-identical reuse of
-# JAECOO_J7_PHEV's capture. JAECOO J7 and Tiggo 8 Pro share the same base
-# platform and no distinguishing CAN signal or FW capture exists yet, so these
-# two platforms are not uniquely identifiable by CAN fingerprint alone —
-# opendbc/car/tests/test_can_fingerprint.py fails for both until real capture
-# data from a Tiggo 8 Pro (or a JAECOO/Tiggo-distinguishing FW_VERSIONS entry)
-# is available. Do not "fix" this with fabricated signal data.
-FINGERPRINTS[CAR.CHERY_TIGGO_8_PRO] = FINGERPRINTS[CAR.CHERY_JAECOO_J7_PHEV]
+# CHERY_TIGGO_8_PRO has no real CAN capture of its own yet (confirmed via web search,
+# 2026-08-12: it's a genuinely distinct vehicle from JAECOO_J7_PHEV - different size/
+# seating, not a rebadge - so reusing J7 PHEV's capture verbatim was never valid and
+# made both platforms fail test_can_fingerprint.py's round-trip assertion, since two
+# byte-identical FINGERPRINTS entries can't both resolve correctly). Left out of the
+# CAN-fingerprint dict entirely, matching CAR.MG_ZS's existing pattern (see
+# opendbc/car/mg/fingerprints.py) - forced/manual selection only until a real capture
+# exists. Do not "fix" this by fabricating distinguishing signal data.

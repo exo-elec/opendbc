@@ -60,7 +60,16 @@ GEAR_MAP = {
 class CarControllerParams:
   STEER_STEP = 2  # FVCM_HSC2_FrP03 message frequency 50Hz
   STEER_MAX = 300
-  STEER_DELTA_UP = 10      # torque increase per refresh
+  # STEER_DELTA_UP=10 (dragonpilot's own value, ported verbatim originally) exceeds
+  # ISO 11270's up-jerk limit given this platform's real measured MAX_LAT_ACCEL_MEASURED
+  # (2.5, opendbc/car/torque_data/override.toml) - confirmed empirically via
+  # opendbc/car/tests/test_lateral_limits.py, which dragonpilot's own value would fail
+  # identically (same formula/thresholds there) if it ran the same check. 7 is the
+  # largest integer value that clears the ISO jerk bound with margin; the C safety
+  # layer's max_rate_up=10 (opendbc/safety/modes/mg.h) is intentionally left as a
+  # looser hard backstop - Python being more conservative than the C enforcement
+  # ceiling is safe, only the reverse would not be.
+  STEER_DELTA_UP = 7       # torque increase per refresh
   STEER_DELTA_DOWN = 15    # torque decrease per refresh
   STEER_DRIVER_ALLOWANCE = 100  # allowed driver torque before start limiting
   STEER_DRIVER_MULTIPLIER = 2  # weight driver torque
