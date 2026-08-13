@@ -108,6 +108,41 @@ class CarInterface(CarInterfaceBase):
       return float(self._neural_ff_model.predict(inputs))
     return torque_from_lateral_accel_neural
 
+  def torque_from_lateral_accel_legacy_siglin_fn(self) -> NeuralFFCallbackType | None:
+    # Opt-in only, same pattern as torque_from_lateral_accel_neural_fn above - does not
+    # change torque_from_lateral_accel()/lateral_accel_from_torque(), which keep using the
+    # current siglin curve (with the `d` constant-offset term) for GMC_ACADIA/
+    # CHEVROLET_SILVERADO exactly as before.
+    #
+    # This exists for consumers migrating from a pre-comma.ai-PR#2528 codebase (e.g.
+    # dev/EDP10) that need to preserve their exact current Acadia/Silverado steering output
+    # during that migration, not adopt this fork's current formula as a side effect of an
+    # unrelated change. comma.ai merged "Torque controller: refactor calculations to be in
+    # accel space" (74bfaa2c, 2025-08-15) - the LatControlInputs-based calling convention
+    # this fork uses today, which drops the `d` term - then reverted it three days later
+    # (4e50498a, 2025-08-18, no stated reason). This fork's current behavior (2-arg API,
+    # `d` term included) is therefore comma.ai's own considered, currently-supported design;
+    # dropping `d` (what this function reproduces) is what a pre-revert, orphaned copy of
+    # #2528 does, not this fork's normal behavior. A consumer should only reach for this if
+    # it has real deployed vehicles depending on the pre-revert formula and has not yet made
+    # an informed decision to move off it - not as a default.
+    if self.CP.carFingerprint not in (CAR.GMC_ACADIA, CAR.CHEVROLET_SILVERADO):
+      return None
+
+    def torque_from_lateral_accel_legacy_siglin(latcontrol_inputs: LatControlInputs, torque_params: structs.CarParams.LateralTorqueTuning,
+                                                gravity_adjusted: bool) -> float:
+      def sig(val):
+        if val >= 0:
+          return 1 / (1 + exp(-val)) - 0.5
+        else:
+          z = exp(val)
+          return z / (1 + z) - 0.5
+      non_linear_torque_params = NON_LINEAR_TORQUE_PARAMS.get(self.CP.carFingerprint)
+      a, b, c, _ = non_linear_torque_params  # `d` deliberately discarded - matches the orphaned pre-revert formula
+      lat_accel = latcontrol_inputs.lateral_acceleration
+      return float((sig(lat_accel * a) * b) + (lat_accel * c))
+    return torque_from_lateral_accel_legacy_siglin
+
   @staticmethod
   def _get_params(ret: structs.CarParams, candidate, fingerprint, car_fw, alpha_long, is_release, docs) -> structs.CarParams:
     ret.brand = "gm"
