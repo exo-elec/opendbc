@@ -118,6 +118,24 @@ defaults to `None`/absent, exactly like
 `torque_from_lateral_accel()`/`lateral_accel_from_torque()` already return
 for a signature that existing consumers depend on.
 
+**A second opt-in accessor, same pattern, for a different reason:**
+`gm/interface.py`'s `torque_from_lateral_accel_legacy_siglin_fn()`
+reproduces `GMC_ACADIA`/`CHEVROLET_SILVERADO`'s torque formula *without*
+the constant offset term (`d`) this fork's normal formula includes.
+`dev/EDP10` carries comma.ai's own PR #2528 ("Torque controller: refactor
+calculations to be in accel space", `74bfaa2c`, 2025-08-15) without its
+revert three days later (`4e50498a`, 2025-08-18, no stated reason) — and
+confirmed it currently drives real Acadia/Silverado vehicles on that
+formula. This fork's normal behavior (with `d`) is comma.ai's own
+considered, currently-supported design and is very likely the *more
+correct* one — but real deployed vehicles shouldn't have their steering
+formula change as a side effect of an unrelated submodule conversion.
+This accessor exists so a migrating consumer can explicitly opt into
+preserving its exact current behavior instead, verified bit-for-bit
+identical to `dev/EDP10`'s live output. It should not be reached for by
+default, and it should not exist for any brand/car beyond this one
+documented migration case.
+
 ## What changed versus a straight copy
 
 This fork's core was bumped from v0.2.1 (2025-02-10, predates the
