@@ -8,6 +8,27 @@ against this fork's own BYD Atto 3 work (`opendbc/car/byd/`,
 to [`BYD_CHERY_JAECOO_PORT.md`](BYD_CHERY_JAECOO_PORT.md), which covers where
 this fork's `car/byd/` code itself came from.
 
+## Update (same day): per-signal "best proven" grading added
+
+The per-message decision tables this doc points to —
+[`BYD_Atto3/DOC/community_port_comparison.md`](https://github.com/EXO-ELEC/BYD_Atto3/blob/com/BYD_ATTO3/DOC/community_port_comparison.md)
+and
+[`TC275_BrownPanda/docs/community_port_status.md`](https://github.com/EXO-ELEC/TC275_BrownPanda/blob/com/BYD_ATTO3/docs/community_port_status.md) —
+now grade each qzwf-overlapping signal by strength of real-vehicle evidence
+(a dated, quantified on-car finding outranks an untested claim; two
+independent lineages agreeing outranks either alone). Headline result:
+**`0x242` bit 37 (`DRIVE_STATE` brake bit)** is an unresolved conflict — this
+fork and the `byd-atto3-openpilot-port` reference both treat it as
+authoritative `brakePressed`, but qzwf/opendbc measured it dead (stuck at 0)
+across 3.6 h of driving on their car and uses `0x342`'s pedal signal
+instead. Neither side is provably wrong about their own vehicle — most
+likely a market/firmware variant difference — but it's unreconciled and
+safety-relevant (feeds disengage/override logic), so treat it as needing a
+fresh local capture, not as settled. See those two docs for the full
+per-signal table, including the strongest confirmed item (`0x1FC`
+`MAIN_TORQUE` = EPS output, not driver input — independently reached by two
+unrelated lineages).
+
 ## TL;DR
 
 - The premise is half right. `commaai/opendbc-data` makes **no BYD Atto 3
