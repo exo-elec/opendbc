@@ -36,11 +36,8 @@
 
 ---
 
-> **exo-electronics fork:** `master` carries the v0.10-compatible BrownPanda
-> Tesla radar adapter used by NGP10. It preserves the official Continental
-> signal layout but consumes BrownPanda's optional converted stream on Tesla party
-> bus 0. See [the BrownPanda radar contract](docs/BROWNPANDA_RADAR.md). Projects
-> must pin an exact commit; the branch name alone is not a reproducible version.
+> **exo-electronics fork:** Projects must pin an exact commit; the branch
+> name alone is not a reproducible version.
 >
 > Branch `port/upstream-bump-byd-chery-jaecoo` (not yet merged to `master`)
 > adds BYD and Chery/Omoda/iCaur/JAECOO car support, ported from

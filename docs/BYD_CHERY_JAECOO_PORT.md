@@ -227,9 +227,11 @@ verified independently via `libsafety_py`.
   this port's actual scope (Chinese EV brand support) and would be scope
   creep onto brands whose radar this fork's own comma.ai-derived,
   presumably-proper native support already covers. Not to be confused with
-  `docs/BROWNPANDA_RADAR.md`'s Tesla-protocol radar adapter, which is
-  unrelated exo-electronics hardware, already merged, and untouched by this
-  decision.
+  the Tesla BrownPanda radar adapter that used to live in
+  `opendbc/car/tesla/radar_interface.py` — unrelated exo-electronics
+  hardware, and since removed (EOP10/NGP10 no longer need it; see git
+  history around the revert), so there's nothing left to confuse this
+  decision with anymore.
 - **Toyota ALKA / `zss.py` (alternate steering-angle-source path) — not
   ported, deliberately.** `dev/EDP10` has this live; dragonpilot's current
   upstream HEAD keeps the code present but commented out (deliberately
