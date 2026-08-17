@@ -396,3 +396,39 @@ brake-bit split already documented above).
   two should start from reconciling this project's own dormant branches
   against the upstream PR history documented earlier in this file, not
   from assuming a green-field port is needed.
+
+### Correction (same day): the local Dolphin capture is Atto 3's sibling — Atto 3 work transfers directly
+
+The "net assessment" above was wrong to treat Dolphin as architecturally
+disconnected from Atto 3. It relied on `TC275_BrownPanda`'s dormant
+`dev/BYD_DOLPHIN` **firmware** branch (torque control, CAN-FD 2 Mbps)
+without checking it against this project's own **captured** Dolphin DBC.
+Doing that check reverses the conclusion:
+
+`~/panda/BYD_Dolphin/DBC/byd_dolphin.dbc` (76 messages, real captured
+data, `cantools`-validated) shares **55 of its 76 message IDs — 72% —
+with `byd_atto3.dbc`, same numeric ID and same message name**, including
+every message this whole crosscheck has been discussing:
+
+| ID | Message | Note |
+| --- | --- | --- |
+| `0x1E2` | `A_0x1E2_MPC_Lateral_Cmd_L8_20ms` | Same ID, same name, same checksum/counter bit positions as Atto 3's steering command. Signal contents are partially `FAKE_`-prefixed (unconfirmed placeholders) — consistent with this file having been seeded from Atto 3's structure as a decode starting point, not independently invented. |
+| `0x1FC` | `B_0x1FC_EPS_MotorState_L8_20ms` | Same ID/name; `EPS_SteeringAngle` is a real (non-`FAKE_`) decoded field here, `FAKE_EPS_MotorAssist`/`FAKE_EPS_DriverTorque`/etc. are still placeholders. |
+| `0x242` | `B_0x242_VCU_DriveState_L8_20ms` | Same ID/name, and **`VCU_BrakePressed` at the same bit position (37)** as the signal at the center of the unresolved qzwf conflict above — this is now a *third* independent local capture (on a related but different vehicle) confirming a brake-pressed bit exists at this position by platform design, which raises confidence this project's own reliance on it is architecturally sound rather than a fluke. |
+| `0x11F`, `0x1FC`, `0x316`, `0x32D`, `0x342`, `0x3B0`, `0x418` | (driver torque, EPS state, LKAS HUD, ACC HUD, pedals, buttons, BSD) | All present at identical IDs/names — the entire per-message decision table in `BYD_Atto3/DOC/community_port_comparison.md` is a direct starting hypothesis for Dolphin, not just generally "related" work. |
+
+This means `TC275_BrownPanda`'s `dev/BYD_DOLPHIN` firmware branch's
+"torque-controlled, CAN-FD" characterization is now the **outlier** that
+needs explaining, not the captured DBC's near-Atto-3-identical structure
+(predominantly classic 8-byte CAN, 72 of 76 messages — not CAN-FD). Given
+that branch went through repeated "cross-contamination cleanup" commits
+around the same time as the also-dormant `dev/DEEPAL_S05` and
+`dev/HAVAL_H6` branches (both plausible CAN-FD/torque vehicles), the most
+likely explanation is that the firmware branch's bus/control-mode
+configuration leaked in from that parallel work rather than reflecting a
+real Dolphin measurement — but this needs an actual reconciliation pass
+against the captured `.dbc`, not another guess. **Revised net assessment:
+this project's own Atto 3 decode work is the single most useful "port" for
+completing Dolphin's remaining `FAKE_`/`UNKNOWN_` signals** — reconcile
+`dev/BYD_DOLPHIN`'s firmware assumptions against `byd_dolphin.dbc`'s real
+captured bytes before trusting either on control mode or bus type.
