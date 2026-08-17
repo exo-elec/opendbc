@@ -183,6 +183,40 @@ fork, `kommuai/opendbc`, `qzwf/opendbc`, or `shemps/byd-atto3-openpilot-port`
 touches GWM/Haval at all — this lineage is entirely separate from the BYD
 Atto 3 work above, same author overlap or not.
 
+### DBC files, checked and imported
+
+Signal-level DBC comparison across the BYD Atto 3 lineages, and a GWM Haval
+H6 DBC import into this fork, both done 2026-08-17:
+
+- **BYD Atto 3:** `BYD_Atto3/DBC/byd_atto3.dbc` (local CANape source) and
+  `TC275_BrownPanda/DBC/BYD_ATTO3.dbc` (firmware copy) are byte-identical
+  for every message checked against the community findings above
+  (`0x11F`, `0x1E2`, `0x1FC`, `0x242`, `0x32D`). Both now carry `CM_ SG_`
+  comment annotations on the specific signals this crosscheck flagged
+  (`VCU_BrakePressed`, `EPS_MainTorque`, `EPS_DriverTorque`, the `0x1E2`
+  `CONST_0x*` fields, `VCU_ACCState`) — informational only, no signal
+  definitions, bit positions, or scaling changed. Both files still parse
+  cleanly (`cantools.database.load_file`) after the edit.
+- **GWM Haval H6:** imported `opendbc/dbc/generator/gwm/gwm_haval_h6_mk3.dbc`
+  into this fork, byte-identical to
+  [PR #3263's copy](https://github.com/AlexandreSato/opendbc/blob/dde1d1eeb2329ae60bb181797242046ad8984f8c/opendbc/dbc/generator/gwm/gwm_haval_h6_mk3.dbc)
+  (commit `dde1d1e`), at the same path the PR uses, for reference only —
+  **not** referenced from `opendbc/car/values.py`, `docs/CARS.md`, or any
+  `car_helpers.py` dispatch, so it changes no runtime behavior. This is the
+  newer, semantically-named DBC the PR's actual `carstate.py`/
+  `carcontroller.py` code uses (`RX_STEER_RELATED`, `ACC_CMD`,
+  `STEER_CMD`, ...) — meaningfully different from (and supersedes, for
+  reference purposes) the already-present `opendbc/dbc/gwm_haval_h6_phev_2024.dbc`
+  baseline, whose message names are still placeholder/generic
+  (`NEW_MSG_147`, `AUTOPILOT`, `SPEED2`, ...) from the earlier, DBC-only
+  merge (PR #1038). **Known issue, carried over as-is from the PR (not
+  something introduced by importing it):** `cantools` fails to parse this
+  file — `Error: The signals DRIVE_MODE_SIGNAL3 and DRIVE_MODE are
+  overlapping in message CAR_OVERALL_SIGNALS`. Consistent with the PR's
+  `mergeable_state: dirty` — this is upstream's own in-progress state, left
+  untouched here rather than "fixed" speculatively on someone else's open
+  PR.
+
 ## `opendbc-data`: the "port claim" doesn't exist
 
 `commaai/opendbc-data` (`~/panda/opendbc-data`, upstream remote, read-only —
