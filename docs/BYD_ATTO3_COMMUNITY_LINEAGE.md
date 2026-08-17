@@ -476,3 +476,35 @@ All four branches' changes are informational comments/flags only — no
 signal definitions, bit positions, scales, or C logic changed. Each was
 committed and pushed on its own branch (not merged into `com/BYD_ATTO3`,
 which remains the single-vehicle Atto 3 firmware).
+
+## Branch inventory completed (2026-08-18)
+
+Confirmed via `git ls-remote --heads origin` directly against
+`TC275_BrownPanda` (bypasses any local cache) that the 12-branch list in
+the table earlier in this doc is the **complete** set — there is no
+fork/upstream remote with additional branches, and no hidden/deleted
+branches surfaced. Completed the two checks left open from the previous
+pass:
+
+- **`dev/MG_5EV`**: checked its DBC content against `commaai/opendbc`'s
+  `mg.dbc` (ported there from dragonpilot) directly, the same way
+  `dev/HAVAL_H6` was checked against PR #3263. Result is the **reverse**
+  of the Dolphin/Haval pattern — this local 74-message capture is *more*
+  complete than opendbc's 20-message `mg.dbc`: all 20 of opendbc's
+  messages are present here with matching transmitter nodes (19/20), and
+  this file has functional names (`B_0x1EC_EPS_SteeringTorque_L8`,
+  `A_0x1FD_LBSS_LKA_Steer_Cmd_L8`, ...) where opendbc only has generic
+  `FrPxx` placeholders. Found one concrete bug, not a hypothesis: `0x1FD`'s
+  `LKAReqToqHSC2` (steering torque request) uses scale `(0.01,-10.24)` →
+  ±10.24 Nm here, consistent with the analogous signal in both files'
+  `0x1EC`; opendbc's `mg.dbc` has the same bit position with scale
+  `(1,-1024)` → ±1024 Nm, two orders of magnitude off and physically
+  implausible for an EPS torque request. Flagged inline so it isn't
+  propagated in if this project ever syncs against opendbc's `mg.dbc`.
+- **`dev/openarm`, `dev/litekit`**: confirmed out of scope — neither has
+  any `.dbc` file (checked via `git ls-tree`). `openarm` is a generic
+  OS/CAN ring-buffer infrastructure port, `litekit` is bootloader/linker/
+  Infineon-driver work. Not vehicle ports, nothing to crosscheck.
+- **`dev/BYD_ATTO3`**: confirmed stale/superseded by `com/BYD_ATTO3` (57
+  files differ, `com/` is strictly ahead) — not a separate vehicle, no
+  additional crosscheck needed.
