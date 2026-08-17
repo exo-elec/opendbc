@@ -432,3 +432,47 @@ this project's own Atto 3 decode work is the single most useful "port" for
 completing Dolphin's remaining `FAKE_`/`UNKNOWN_` signals** — reconcile
 `dev/BYD_DOLPHIN`'s firmware assumptions against `byd_dolphin.dbc`'s real
 captured bytes before trusting either on control mode or bus type.
+
+## Dormant TC275_BrownPanda branches — DBC files updated (2026-08-18)
+
+Applied the same crosscheck annotations to each dormant vehicle branch's
+own DBC/firmware files (not just `com/BYD_ATTO3`), so the findings are
+visible wherever an engineer actually opens that branch, not only in this
+doc:
+
+- **`dev/BYD_DOLPHIN`**: `DBC/BYD_DOLPHIN.dbc` got the same Atto3-informed
+  `CM_ BO_` hypothesis comments as `~/panda/BYD_Dolphin/DBC/byd_dolphin.dbc`
+  (0x1E2/0x1FC). `DBC/byd_dolphin.h` got an inline flag on the CAN-FD/
+  torque-control `#define`s noting they contradict the captured DBC and
+  are suspected to be contamination from the parallel Deepal/Haval work
+  (this branch's own `CLAUDE.md` already documents TX hook safety
+  validation as 0% complete, so none of this is production-relevant yet
+  regardless).
+- **`dev/HAVAL_H6`**: cross-checked `DBC/HAVAL_H6.dbc` against
+  `commaai/opendbc` open PR #3263 directly (not just the BYD lineage) and
+  found real, concrete matches: `0x12B`'s `AP_STATE` bit (125) matches the
+  PR's `steer_req` bit exactly; `0x12B`'s `AP_STEERING_UNDEFINED_SIGNAL1`
+  (10-bit signed) lines up with the PR's `desired_torque` field; `0x13B`'s
+  wheel-speed scale (`0.05924739`) is an **exact, independently-derived
+  match** with the PR's constant — the strongest confirmation in this
+  whole crosscheck. `0x147` is completely undecoded locally
+  (`NEW_MSG_147`) where the PR has a real, reviewed torque-measurement
+  formula — a concrete next capture target. Also flagged: `haval_h6.h`
+  declares `FD_ENABLED=FALSE` while `HAVAL_H6.dbc`'s own `0x13B` message
+  needs bytes past the classic-CAN 8-byte limit — an internal
+  contradiction, unresolved. Also noted (not fixed, pre-existing, unrelated
+  to these edits): `HAVAL_H6.dbc` already fails to parse with `cantools`
+  due to an overlapping-signal bug in `B_0x12F_VCU_DriveMode` — confirmed
+  by testing the pre-edit `HEAD`.
+- **`dev/DEEPAL_S05`**: `DEEPAL_S05.dbc` parses cleanly and is genuinely
+  CAN-FD — added a one-line cross-reference noting this branch is the
+  likely real source of the CAN-FD config that leaked into
+  `dev/BYD_DOLPHIN`.
+- **`dev/CHERY_OMODA5`, `dev/CHERY_TIGGO7`, `dev/JAECOO_J5`, `dev/JAECOO_J7`**:
+  left untouched — these are explicit scaffolds with no DBC content to
+  crosscheck yet (see the branch table earlier in this doc).
+
+All four branches' changes are informational comments/flags only — no
+signal definitions, bit positions, scales, or C logic changed. Each was
+committed and pushed on its own branch (not merged into `com/BYD_ATTO3`,
+which remains the single-vehicle Atto 3 firmware).
