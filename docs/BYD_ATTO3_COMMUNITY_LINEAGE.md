@@ -51,9 +51,16 @@ not evidence of an independent, comma-supported port.
   artifact is real on-car validation data, but it belongs to the same
   open/unmerged PR below, not to a shipped, comma-supported port.
 - There is no single "BYD Atto 3 port." At least **four independent
-  lineages** exist, split by control philosophy: two torque-control
-  (this fork + its direct source), two angle-control (unrelated to each
-  other and to this fork).
+  lineages** exist. **Correction (2026-08-17, caught while researching
+  BYD Dolphin — see below):** this doc originally said the four split
+  cleanly into two torque-control and two angle-control lineages. That was
+  wrong. All four actually converge on **angle control** for Atto 3
+  specifically — this fork's/kommuai's `car/byd/` does carry a
+  torque-controlled `mpc_lka` code path, but `BYD_ATTO3` doesn't dispatch
+  to it; only a different model in the same multi-platform port
+  (`BYD_SONG_PLUS_DMI_21`) does. The real discriminator between the four
+  lineages is hardware topology (this fork's TC275 bridge MCU vs. everyone
+  else's direct-panda), not control mode. See the corrected table below.
 - GWM Haval H6 has exactly **one** lineage (not four, unlike BYD), and it's
   further along than first thought: a complete, CI-green `opendbc/car/gwm/`
   interface sits in open PR `commaai/opendbc#3263`, reviewed by a comma
@@ -65,18 +72,23 @@ not evidence of an independent, comma-supported port.
 
 | Lineage | Repo | Control mode | Safety architecture | `0x1E2` / steering frame | Structure |
 | --- | --- | --- | --- | --- | --- |
-| **This fork** | `EXO-ELEC/opendbc` (`opendbc/car/byd/`), branch `port/upstream-bump-byd-chery-jaecoo` | Torque (`MPC_LKA`) | `panda/opendbc/safety/modes/byd.h`, zone-based angle/rate backstop table, **plus** a second, hardware-level backstop: `TC275_BrownPanda` (Infineon TC275 gateway MCU sitting between vehicle and comma device, own `Safety_ZoneInterp` 8-point speed grid) | Local torque-controlled `MPC_LKA` layout, `cam_lka`/`mpc_lka` split | `interface.py`/`fingerprints.py`/`values.py` + `mpc_lka/`, `cam_lka/` subpackages |
-| **kommuai/opendbc** (`~/pilot/opendbc`, origin) | Same repo family, `master` | Torque (`MPC_LKA`) | Same `byd.h` family (older cereal/`car.capnp` API — pre `structs` migration) | Same layout — `bydcan.py` is **byte-identical** to this fork's | Same `cam_lka`/`mpc_lka` split |
-| **shemps/byd-atto3-openpilot-port** (`EXO-ELEC/byd-atto3-openpilot-port`, vendored copy under `port/opendbc/`) | Independent RE, own repo | **Angle** (absolute `STEER_ANGLE` position-servo target) | Own `safety_byd.h` variant, own accept test | `STEERING_MODULE_ADAS` (0x1E2) with `E2E_ALIVE_1/2`, different bit layout than the torque lineage | Flat (`interface.py`/`carstate.py`/`carcontroller.py`, no `cam_lka`/`mpc_lka` split); adds `veoneer_tracks.py` (radar), references upstream [commaai/opendbc PR #3337](https://github.com/commaai/opendbc/pull/3337) — open, unmerged as of 2026-07-30 |
+| **This fork** | `EXO-ELEC/opendbc` (`opendbc/car/byd/`), branch `port/upstream-bump-byd-chery-jaecoo` | **Angle** (`BYD_ATTO3` dispatches to `cam_lka`, `apply_std_steer_angle_limits`) | `panda/opendbc/safety/modes/byd.h`, zone-based angle/rate backstop table, **plus** a second, hardware-level backstop: `TC275_BrownPanda` (Infineon TC275 gateway MCU sitting between vehicle and comma device, own `Safety_ZoneInterp` 8-point speed grid) | `cam_lka`'s `STEER_ANGLE`-style command frame | `interface.py`/`fingerprints.py`/`values.py` + `cam_lka/` (used by `BYD_ATTO3`), `mpc_lka/` (torque-controlled, but only `BYD_SONG_PLUS_DMI_21` — a different model bundled in the same multi-platform port — dispatches to it) subpackages |
+| **kommuai/opendbc** (`~/pilot/opendbc`, origin) | Same repo family, `master` | **Angle** (same `cam_lka` dispatch for `BYD_ATTO3`) | Same `byd.h` family (older cereal/`car.capnp` API — pre `structs` migration) | Same layout — `bydcan.py` is **byte-identical** to this fork's | Same `cam_lka`/`mpc_lka` split, same dispatch |
+| **shemps/byd-atto3-openpilot-port** (`EXO-ELEC/byd-atto3-openpilot-port`, vendored copy under `port/opendbc/`) | Independent RE, own repo | **Angle** (absolute `STEER_ANGLE` position-servo target) | Own `safety_byd.h` variant, own accept test | `STEERING_MODULE_ADAS` (0x1E2) with `E2E_ALIVE_1/2`, different bit layout than this fork's `cam_lka` frame despite both being angle-controlled | Flat (`interface.py`/`carstate.py`/`carcontroller.py`, no `cam_lka`/`mpc_lka` split); adds `veoneer_tracks.py` (radar), references upstream [commaai/opendbc PR #3337](https://github.com/commaai/opendbc/pull/3337) — open, unmerged as of 2026-07-30 |
 | **qzwf/opendbc** (`byd-atto3-stable` branch, vendored into `qzwf/openpilot`) | Independent RE, own repo | **Angle** (`apply_std_steer_angle_limits`, EPS treated as position servo) | Stock upstream `opendbc`/panda safety model (no hardware bridge) | `STEERING_MODULE_ADAS` (0x1E2) — **292-line diff against shemps's version of the same frame**: independently reverse-engineered, not a fork of shemps's work | Flat, same file set as upstream `car/<brand>/` convention; active, still shipping fixes as of 2026-08-11 (last commit: "fix the walking 0x1E2 frame that killed the car's ADAS") |
 
 Key discriminators, in order of how cleanly they separate the four:
 
-1. **Torque vs. angle control** splits the four into two pairs cleanly: this
-   fork + kommuai control via `MPC_LKA` torque commands; shemps + qzwf both
-   moved to absolute-angle EPS control (treating the EPS as a position
-   servo), independently of each other.
-2. **Hardware topology** is this fork's real outlier: `TC275_BrownPanda`
+1. **Control mode does not split the four — all four use angle control for
+   Atto 3.** This fork's/kommuai's `car/byd/` also contains a
+   torque-controlled `mpc_lka` code path, but `BYD_ATTO3` doesn't use it —
+   only `BYD_SONG_PLUS_DMI_21` (a different model in the same
+   multi-platform port) dispatches there. shemps and qzwf independently
+   arrived at the same angle-control approach this fork/kommuai already
+   used. (Previous version of this doc claimed a clean torque-vs-angle
+   split; that was an error, caught 2026-08-17.)
+2. **Hardware topology** is this fork's real outlier, and the axis that
+   actually separates the four: `TC275_BrownPanda`
    inserts a physical Infineon TC275 gateway MCU between the vehicle and the
    comma device (a Tesla-Model-3-party-protocol bridge with its own
    zone-interpolated backstop LUT). None of the other three lineages use a
@@ -95,9 +107,10 @@ Key discriminators, in order of how cleanly they separate the four:
    2026-07-30 — still unmerged.
 
 None of this makes one lineage "correct" and the others "wrong" — they are
-different, incompatible engineering approaches (torque vs. angle command,
-bridge-MCU vs. direct-panda) validated against different vehicles/model
-years. Treat cross-lineage signal names as reference material only, per the
+different, incompatible engineering approaches (bridge-MCU vs. direct-panda,
+independently reverse-engineered bit layouts even where the control mode
+agrees) validated against different vehicles/model years. Treat cross-lineage
+signal names as reference material only, per the
 existing per-message tables in
 [`BYD_Atto3/DOC/community_port_comparison.md`](https://github.com/EXO-ELEC/BYD_Atto3/blob/com/BYD_ATTO3/DOC/community_port_comparison.md)
 and
@@ -178,10 +191,33 @@ original claim) understates it. The accurate statement: **a complete,
 CI-green, maintainer-reviewed GWM Haval H6 port exists, publicly, as an
 open PR — but it is not merged, its longitudinal control is explicitly
 withheld pending comma's own validation, and it's unclear the DBC/safety
-model generalizes past the one tested firmware/trim.** Nothing in this
-fork, `kommuai/opendbc`, `qzwf/opendbc`, or `shemps/byd-atto3-openpilot-port`
-touches GWM/Haval at all — this lineage is entirely separate from the BYD
-Atto 3 work above, same author overlap or not.
+model generalizes past the one tested firmware/trim.** None of the
+*opendbc-level* forks checked (this fork's `opendbc`, `kommuai/opendbc`,
+`qzwf/opendbc`, `shemps/byd-atto3-openpilot-port`) touch GWM/Haval — but
+see the correction directly below: `TC275_BrownPanda`, a *different* repo
+in this same project, does have its own independent GWM Haval H6 firmware
+work, missed in the original pass.
+
+### Correction (2026-08-17, found while researching BYD Dolphin): TC275_BrownPanda has its own dormant per-vehicle branches
+
+The checks above only looked at `TC275_BrownPanda`'s checked-out branch
+(`com/BYD_ATTO3`). `git branch -a` on that repo turns up remote branches
+never examined in this crosscheck:
+
+| Branch | Last commit | Status |
+| --- | --- | --- |
+| `dev/BYD_DOLPHIN` | 2025-12-14 | Real work: `DBC/byd_dolphin.c/h`, `DBC/BYD_DOLPHIN.dbc` (76 messages), full safety API (fingerprint, TxHook, `TorqueSteeringLimits`) — **torque-controlled**, CAN-FD 2 Mbps. See the BYD Dolphin section below. |
+| `dev/HAVAL_H6` | — | Real work: `DBC/HAVAL_H6.dbc`, CAN-FD 2M with BRS, message renaming passes (`A_0x12B_MPC_Lateral_Cmd`, DEEPAL-style descriptive names). **This directly contradicts the "nothing in this fork touches GWM/Haval" line above** — that line is only true of the `opendbc` repo; `TC275_BrownPanda` has independent, unrelated Haval H6 firmware work that was missed because it sits on an unchecked branch, not because it doesn't exist. |
+| `dev/DEEPAL_S05` | — | Real work: same firmware pattern as Dolphin/Haval (`DEEPAL_S05.dbc`, CANdb++-compatible naming pass). Changan Deepal S05, not a BYD model. |
+| `dev/MG_5EV` | — | Real work: DBC structure/attribute fixes, CM_-before-Attributes ordering pass. MG 5 EV, not a BYD model. |
+| `dev/CHERY_OMODA5`, `dev/CHERY_TIGGO7`, `dev/JAECOO_J5`, `dev/JAECOO_J7` | — | Explicitly self-documented as **scaffolds** ("Mark as scaffold awaiting protocol implementation") — not real ports, unlike the four above. |
+
+None of these branches are merged into `com/BYD_ATTO3` (the current
+single-vehicle firmware) or referenced from any doc this crosscheck
+touched before now. Whether they're worth reviving is a separate decision
+from this crosscheck — flagging their existence and rough maturity here so
+they don't stay invisible to future doc passes the way they were to this
+one.
 
 ### DBC files, checked and imported
 
@@ -264,3 +300,99 @@ GIT_LFS_SKIP_SMUDGE=1 git clone --single-branch --branch byd-atto3-stable \
 
 This completed in seconds and gave direct access to
 `opendbc/car/byd/{interface,carstate,carcontroller,bydcan,values,fingerprints}.py`.
+
+## BYD Dolphin — checked 2026-08-17
+
+Scope: does this project's BYD Dolphin work (`~/panda/BYD_Dolphin`,
+`TC275_BrownPanda`'s `dev/BYD_DOLPHIN` branch) benefit from porting
+anything, and is there relevant "online" (upstream/community) data?
+
+### What exists on our side
+
+- **`~/panda/BYD_Dolphin`** (CANape workspace, `main` branch): local capture
+  work, dated 2025-10-14 (`DOC/dbc_completion_summary.md`). Two DBCs
+  independently validated with `cantools`: `byd_dolphin.dbc` (84 messages;
+  steering command `A_0x1BA_MPC_LateralCommand`) and `deepal_s05.dbc` (84
+  messages, Changan Deepal S05, a different manufacturer sharing enough of
+  the same body/ADAS platform to be captured in the same project). Also
+  holds `DBC/reference/0ADASACAN_C857_V1.4_20241105_REEV&EV_BDC(LAS).dbc`
+  — an OEM reference DBC for this shared platform (node names `ACC`/`GW`/
+  `LAS`/`BDC` match `deepal_s05.dbc`'s own node list), renamed 83/88
+  messages into this project's `{A|B|C|U}_0xNNN_Function` convention. (This
+  is the same file this doc initially mis-flagged as "unclear provenance,
+  possibly a GWM false positive" while researching Haval H6 — it's
+  genuinely this platform's own reference file, unrelated to Great Wall
+  Motors; that was a wrong tangent, corrected here.)
+- **`TC275_BrownPanda`, `dev/BYD_DOLPHIN` branch** (dormant since
+  2025-12-14 — see the branch table above): a complete firmware module,
+  `DBC/byd_dolphin.c/h`, mirroring `byd_atto3.c`'s API surface exactly
+  (message check/decode, fingerprinting, TX hook, safety limits). **Key
+  fact: it's torque-controlled** (`BYD_DOLPHIN_STEERING_LIMITS` is a
+  `TorqueSteeringLimits` struct, `TorqueMotorLimited` type, `max_steer:
+  300`), and the bus is **CAN-FD at 2 Mbps data phase** — both genuinely
+  different from Atto 3's classic-CAN, angle-controlled setup. `DBC/
+  BYD_DOLPHIN.dbc` has 76 messages.
+
+### What the community/"online" side claims
+
+- **This fork's `opendbc/car/byd/values.py`** (ported from kommuai, same as
+  the rest of the BYD work in this doc) lists **"BYD Dolphin 2023-26"** as
+  a supported car doc entry — but bundled *inside* the `BYD_SEAL`
+  `CamLkaPlatformConfig` (angle control, `byd_general_pt.dbc`), sharing
+  Seal's fingerprint entry outright. There is no Dolphin-specific
+  fingerprint, DBC, or validation anywhere in this chain.
+- Traced the claim back further: `commaai/opendbc` closed PR
+  [#2429](https://github.com/commaai/opendbc/pull/2429) ("Non-Chinese BYDs
+  Brand port," `dotslashofficial`, 2025-07-02, closed unmerged
+  2025-12-24) is explicitly scoped to **export markets — Thailand,
+  Singapore, Malaysia, Australia** — and its description says, verbatim,
+  "Primarily only for Atto 3 only. Will eventually be expandable to Seal,
+  Sealion, Dolphin etc." That PR's file list (flat `opendbc/car/byd/*.py`,
+  `byd_general_pt.dbc`, `safety/modes/byd.h`, no `cam_lka`/`mpc_lka` split)
+  matches the DBC filename and general shape of what later became
+  kommuai's/this fork's BYD support — i.e. the "Dolphin" entry this fork
+  carries is very likely inherited from a **stated future intent** in an
+  unmerged, export-market-focused PR, not from anyone validating it
+  against an actual Dolphin.
+
+### The gap this surfaces
+
+Two independent signals point the same direction: **the community
+"Dolphin support" (angle control, via `BYD_SEAL`) and this project's own
+captured Dolphin (torque control, CAN-FD, per `TC275_BrownPanda`'s
+`dev/BYD_DOLPHIN` branch) may not be the same vehicle generation/market
+variant.** This is the same class of risk as the Atto 3 `0x242` conflict
+above (community claim vs. this project's own evidence disagreeing on a
+control-relevant fact) — except here it's the control *mode* itself
+(torque vs. angle), not one signal, and there's no third-party measurement
+to arbitrate. **Do not assume `opendbc`'s `BYD_SEAL`/Dolphin car
+definition applies to this project's captured Dolphin** without checking
+whether the fingerprint/FW versions actually match — they very plausibly
+don't (India/SE-Asia-market BYDs have shown signal-scale and even
+control-architecture differences from other markets throughout this whole
+crosscheck, e.g. the Atto 3 wheel-speed correction factor and the `0x242`
+brake-bit split already documented above).
+
+### Net assessment: is there a benefit to porting anything?
+
+- **No ready-to-port code exists for a torque-controlled, CAN-FD BYD
+  Dolphin anywhere checked** (commaai/opendbc, kommuai/opendbc,
+  qzwf/opendbc, shemps's port, PR #2429) — all BYD Atto 3/Dolphin/Seal
+  community work found in this whole crosscheck is angle-control,
+  classic-CAN. If this project's own `dev/BYD_DOLPHIN` firmware and local
+  DBC captures are accurate, there is currently **nothing external to
+  port in** for Dolphin — this project's own dormant branch and CANape
+  captures are the most complete Dolphin-specific work found, full stop.
+- The actionable finding is the reverse of "port something in": **don't
+  let `opendbc`'s `BYD_SEAL` car definition claim Dolphin support in this
+  project's own eventual `car/byd/` sync** without gating it behind a
+  fingerprint/FW check against this project's own captured Dolphin data —
+  otherwise a real Dolphin could silently get matched to Seal's
+  angle-control interface when this project's own evidence says it needs
+  `dev/BYD_DOLPHIN`'s torque-control path instead.
+- Same discovery applies to Haval H6 and Deepal S05: this project already
+  has real, independent, unmerged-anywhere-upstream firmware work for
+  both (see the branch table above) — the "online data" search for those
+  two should start from reconciling this project's own dormant branches
+  against the upstream PR history documented earlier in this file, not
+  from assuming a green-field port is needed.
