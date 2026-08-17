@@ -29,18 +29,37 @@ per-signal table, including the strongest confirmed item (`0x1FC`
 `MAIN_TORQUE` = EPS output, not driver input — independently reached by two
 unrelated lineages).
 
+## Update 2: GWM Haval H6 finding corrected — a real port exists, unmerged
+
+The original pass below ("no full car port anywhere") only checked default
+branches and named forks; it missed GitHub's PR history. A full,
+CI-passing, comma-maintainer-reviewed GWM Haval H6 car interface has
+existed as an open, unmerged PR (`commaai/opendbc#3263`) since 2026-03-29,
+carried by a single lineage (same two authors) going back to mid-2024. Its
+longitudinal control is explicitly gated behind a debug-only build flag —
+comma's own maintainer says they haven't done final validation yet. Full
+writeup replaces the old "GWM Haval H6" section below. This also resolves
+where the `opendbc-data` Haval H6 tuning report came from: its fingerprint
+(`075b133b6181e058`) matches the exact dongle the PR author used for their
+test routes — the "report" is this same unmerged PR's own validation data,
+not evidence of an independent, comma-supported port.
+
 ## TL;DR
 
-- The premise is half right. `commaai/opendbc-data` makes **no BYD Atto 3
-  claim at all** (zero BYD files) and its one GWM Haval H6 artifact is a
-  longitudinal-tuning report, not a port claim — see below.
+- The premise is half right, in different ways for each car. `opendbc-data`
+  makes **no BYD Atto 3 claim at all** (zero BYD files); its one Haval H6
+  artifact is real on-car validation data, but it belongs to the same
+  open/unmerged PR below, not to a shipped, comma-supported port.
 - There is no single "BYD Atto 3 port." At least **four independent
   lineages** exist, split by control philosophy: two torque-control
   (this fork + its direct source), two angle-control (unrelated to each
   other and to this fork).
-- GWM Haval H6 has **no full car port anywhere checked** — DBC file only,
-  in `commaai/opendbc` and `kommuai/opendbc`. Nobody has shipped a
-  `car/gwm` (or similarly named) interface directory.
+- GWM Haval H6 has exactly **one** lineage (not four, unlike BYD), and it's
+  further along than first thought: a complete, CI-green `opendbc/car/gwm/`
+  interface sits in open PR `commaai/opendbc#3263`, reviewed by a comma
+  maintainer, longitudinal control explicitly withheld pending comma's own
+  validation. Not merged, not "successfully ported" in the shipped sense —
+  but not vaporware either.
 
 ## BYD Atto 3: four lineages, not one
 
@@ -85,23 +104,84 @@ and
 [`TC275_BrownPanda/docs/community_port_status.md`](https://github.com/EXO-ELEC/TC275_BrownPanda/blob/com/BYD_ATTO3/docs/community_port_status.md) —
 do not merge wire-format assumptions across lineages without a local capture.
 
-## GWM Haval H6: no full port found anywhere checked
+## GWM Haval H6 — correction: a full port exists, open upstream, not yet merged
 
-- `commaai/opendbc` (upstream, `master`): `opendbc/dbc/gwm_haval_h6_phev_2024.dbc`
-  exists. No `opendbc/car/gwm` (or any brand-folder match for
-  `gwm`/`haval`/`greatwall`) interface directory — DBC only, not wired to a
-  `CarInterface`.
-- `kommuai/opendbc` (`~/pilot/opendbc`): same DBC file present, same
-  situation — no car interface directory.
-- `qzwf/opendbc`, `shemps/byd-atto3-openpilot-port`: no GWM/Haval file of any
-  kind.
-- This fork (`EXO-ELEC/opendbc`): no GWM/Haval file of any kind. (The only
-  `gwm` string hits in this fork's DBCs are Ford's `GWM` — "Global Wireless
-  Module" — CAN node in `ford_lincoln_base_pt.dbc`/`FORD_CADS*.dbc`; false
-  positive, unrelated to Great Wall Motors.)
+**This section previously said "no full port found anywhere" — that was
+wrong.** The initial pass only checked `master` branches and a handful of
+named forks. A GitHub PR search on `commaai/opendbc` and `commaai/openpilot`
+turns up a two-year, single-lineage community effort that has produced a
+complete, CI-passing, actively-reviewed car interface — it just hasn't
+landed on `master` yet, which is why it didn't show up in a branch/dir scan.
 
-So there is nothing to cross-check on our side for GWM Haval H6 — no repo
-examined has a working port, only a shared DBC.
+### The lineage — one continuous effort, not competing forks
+
+Unlike BYD Atto 3 (four independent lineages), GWM Haval H6 has **one**
+lineage, carried by two community members (`AlexandreSato`, `celobusana`),
+iterating in public since mid-2024:
+
+| PR | Repo | Date | State | What it did |
+| --- | --- | --- | --- | --- |
+| [openpilot#32880](https://github.com/commaai/openpilot/pull/32880) | openpilot | 2024-06-30 | closed, unmerged | First car-interface attempt, `AlexandreSato` (pre-dates opendbc/openpilot code split) |
+| [openpilot#32877](https://github.com/commaai/openpilot/pull/32877) | openpilot | 2024-06-30 | closed, unmerged | Companion CRC fix, `celobusana` |
+| [opendbc#1038](https://github.com/commaai/opendbc/pull/1038) | opendbc | 2024-05-04 | **merged** | `gwm_haval_h6_phev_2024.dbc` — DBC only. This is the file this doc previously found and stopped at. |
+| [opendbc#1086](https://github.com/commaai/opendbc/pull/1086) | opendbc | 2024-08-18 | closed, unmerged | "Brand Port" attempt, `AlexandreSato` |
+| [opendbc#3093](https://github.com/commaai/opendbc/pull/3093) | opendbc | 2026-01-30 | **merged** | Small DBC fix (`STEERING_DIRECTION` bit) |
+| [opendbc#3117](https://github.com/commaai/opendbc/pull/3117) | opendbc | 2026-02-08 | closed, unmerged | Fuller car-interface attempt (19 files, +1171) |
+| [opendbc#3521](https://github.com/commaai/opendbc/pull/3521) | opendbc | 2026-07-05 | **merged** | Typo/label fixes to the DBC |
+| **[opendbc#3263](https://github.com/commaai/opendbc/pull/3263)** | opendbc | 2026-03-29 | **open**, last updated 2026-07-03 | **"GWM Haval H6: Initial Platform Support" — the current, live attempt** |
+
+### What #3263 actually contains
+
+20 files, +1019/−43: a full `opendbc/car/gwm/` interface
+(`carstate.py`, `carcontroller.py`, `gwmcan.py`, `fingerprints.py`,
+`values.py`, `interface.py`), `opendbc/safety/modes/gwm.h` with real
+RX/TX hooks, `opendbc/safety/tests/test_gwm.py`, and a renamed/expanded DBC
+(`opendbc/dbc/generator/gwm/gwm_haval_h6_mk3.dbc`, +91/−40 over the merged
+baseline). This is comparable in scope to this fork's own `car/byd/` port.
+
+Concretely, from the code:
+
+- **Steering: torque control** (`apply_meas_steer_torque_limits`,
+  `STEER_MAX = 253`) — same family as this fork's/kommuai's BYD lineage, not
+  qzwf's/shemps's angle control.
+- **Vehicle specs declared:** mass 2040 kg, wheelbase 2.738 m, steer ratio
+  17.416, model years "Haval H6 2019-26".
+- **Safety limits (`gwm.h`):** torque max 253, rate up/down 4/6,
+  max torque error 80, max realtime delta 100; longitudinal max gas 4577,
+  min gas −10, max brake 107 (units as coded, not independently verified
+  here).
+- **Longitudinal control is explicitly gated behind `ALLOW_DEBUG`** — not a
+  documentation caveat, a build flag. comma's own reviewer
+  (`adeebshihadeh`, a maintainer) commented directly on this: *"this should
+  go under `ALLOW_DEBUG`. once we're able to do final validation ourselves,
+  we'll move it out."* I.e. even comma has not yet signed off on the
+  longitudinal safety limits as ready for general use.
+- **Fingerprint coverage is thin by the maintainer's own question**
+  ("do we get any other firmware?") — the author's answer: only one
+  firmware responds, and only over OBD, not on the main bus. A second
+  variant, the "Haval Jolion" (per a Discord contributor in the PR body),
+  is flagged as needing a **separate port** because its EPS-to-camera
+  feedback works differently — i.e. "Haval H6" is not necessarily one
+  wire-compatible vehicle family.
+- **CI passes** on the current head (`test models`, `car diff`, full test
+  suite all green) and a comma maintainer has left substantive review
+  comments (code organization concern about EPS-fault-detection logic
+  living in `interface.py` instead of `carstate.py`/`carcontroller.py` —
+  acknowledged by the author but not obviously resolved). `mergeable_state`
+  is currently `dirty` (needs a rebase onto `master`), not blocked on
+  unresolved review threads.
+
+### Net assessment
+
+"Successfully ported" overstates it and "no port exists" (this doc's
+original claim) understates it. The accurate statement: **a complete,
+CI-green, maintainer-reviewed GWM Haval H6 port exists, publicly, as an
+open PR — but it is not merged, its longitudinal control is explicitly
+withheld pending comma's own validation, and it's unclear the DBC/safety
+model generalizes past the one tested firmware/trim.** Nothing in this
+fork, `kommuai/opendbc`, `qzwf/opendbc`, or `shemps/byd-atto3-openpilot-port`
+touches GWM/Haval at all — this lineage is entirely separate from the BYD
+Atto 3 work above, same author overlap or not.
 
 ## `opendbc-data`: the "port claim" doesn't exist
 
@@ -114,10 +194,19 @@ archive, not a car-port repo. Its BYD/GWM footprint:
   `longitudinal_reports/GWM_HAVAL_H6_075b133b6181e058_00000162--df9a818bf7.html`,
   added by commit `542af76` ("New report after tune from Gwm haval h6 (#20)"),
   listed in the repo's README as a `master`-branch longitudinal maneuver
-  report. This is evidence that *someone* ran openpilot longitudinal on a
-  Haval H6 well enough to generate a tuning report — it is not a "BYD Atto 3
-  and GWM Haval H6 ported successfully" claim, and the repo makes no such
-  claim in its own README.
+  report. **The fingerprint hash in the filename, `075b133b6181e058`,
+  matches the exact dongle used for the test routes listed in
+  `commaai/opendbc#3263`'s own PR description** (see the GWM Haval H6
+  section above) — almost certainly the same tester/vehicle, not an
+  independent report. So this file is not third-party proof of a shipped
+  port; it's the still-open PR's own on-car validation data, submitted to
+  the shared report archive. The README's "master" label for this report
+  most likely refers to the longitudinal-tuning report *format/tooling*
+  (which is generated the same way regardless of which branch a car's
+  interface lives on), not a claim that GWM Haval H6 support is on
+  `commaai/opendbc`'s `master` — it demonstrably is not (see above). Either
+  way, this is not a "BYD Atto 3 and GWM Haval H6 ported successfully"
+  claim, and the repo makes no such claim in its own README.
 
 ## How `qzwf/openpilot.git` clone failures were resolved
 
