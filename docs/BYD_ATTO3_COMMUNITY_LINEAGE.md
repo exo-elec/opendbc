@@ -508,3 +508,43 @@ pass:
 - **`dev/BYD_ATTO3`**: confirmed stale/superseded by `com/BYD_ATTO3` (57
   files differ, `com/` is strictly ahead) — not a separate vehicle, no
   additional crosscheck needed.
+
+## Correction (2026-08-19): the Chery/JAECOO branches weren't scaffolds — they're an unvalidated Atto3-cloned template
+
+The prior pass dismissed `dev/CHERY_OMODA5`, `dev/CHERY_TIGGO7`,
+`dev/JAECOO_J5`, `dev/JAECOO_J7` as "scaffolds" based only on their commit
+messages ("Mark as scaffold awaiting protocol implementation") — the same
+mistake flagged earlier in this doc (verify actual content, not
+descriptions). Checking the actual files:
+
+- Each branch has a real, populated `.dbc` (14 messages, 63 signals) and a
+  full `.c`/`.h` module with fingerprint/decode/TX-hook functions — not an
+  empty stub.
+- All four branches' `.dbc` files are **byte-for-byte identical** to each
+  other.
+- That shared file's 14 message IDs and DLCs are an **exact match to
+  `byd_atto3.dbc`'s 14 core ADAS messages** (`0x1E2`, `0x316`, `0x32E`,
+  `0x11F`, `0x121`, `0x133`, `0x1F0`, `0x1FC`, `0x242`, `0x294`, `0x32D`,
+  `0x342`, `0x3B0`, `0x418`) — confirming this is a single template cloned
+  from the Atto 3 message structure, stamped across four different
+  vehicles, not real captured data from any of them.
+
+Cross-checked against `commaai/opendbc`'s real, community-validated Chery/
+JAECOO support (`opendbc/car/chery/`, `chery_general_pt.dbc`, which
+directly covers `CHERY_OMODA_5` and `CHERY_JAECOO_J7_PHEV` — real
+`CarSpecs`, real fingerprints). Its actual CAN IDs are **completely
+different** from the template: the steering command lives at `0x345`
+(`LANE_KEEP.STEER_CMD_ANGLE`, angle control, 0.1 deg/count — not this
+template's `0x1E2`), steering feedback at `0x1D3`/`0xC4`
+(`EPS`/`STEER_RELATED`, not `0x11F`). Where the template happens to share
+a numeric ID with a real opendbc Chery message (`0x316`=790, vs opendbc's
+unrelated `WHEELSPEED_1` at the same ID), it's a coincidental collision,
+not a real match — worth being careful not to assume otherwise.
+
+**Net assessment, same shape as the Dolphin/Haval findings above:** don't
+build on this template as-is. `opendbc/dbc/chery_general_pt.dbc`'s real
+message list is a far better starting point for an actual Chery/JAECOO
+local capture than the current Atto3-derived placeholder. Flagged inline
+on all four branches (`CM_ BO_` comment on the steering command message,
+no signal changes) rather than silently replaced, since none of this is
+backed by a local capture yet either way.
