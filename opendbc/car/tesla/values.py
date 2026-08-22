@@ -59,6 +59,13 @@ GEAR_MAP = {
 class CarControllerParams:
   ANGLE_RATE_LIMIT_UP = AngleRateLimit(speed_bp=[0., 5., 15.], angle_v=[10., 1.6, .3])
   ANGLE_RATE_LIMIT_DOWN = AngleRateLimit(speed_bp=[0., 5., 15.], angle_v=[10., 7.0, 0.8])
+  # Research-supported outer bound for ordinary cruise/following control.
+  # Stronger requests must be explicitly marked as AEB by the Tesla CAN layer.
+  ACCEL_MIN_COMFORT = -2.5  # m/s^2
+
+  # Tesla DAS_control's encoded actuator range. This is a protocol/controller
+  # ceiling, not a normal-cruise comfort target and not evidence of UN R152
+  # AEBS compliance. See docs/eop/AEB_LONGITUDINAL_ENVELOPE.md.
   ACCEL_MIN = -3.48  # m/s^2
   ACCEL_MAX = 2.0    # m/s^2
   JERK_LIMIT_MAX = 4.9  # m/s^3, ACC faults at 5.0

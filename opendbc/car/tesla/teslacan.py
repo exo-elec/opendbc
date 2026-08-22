@@ -24,11 +24,11 @@ class TeslaCAN:
     values["DAS_steeringControlChecksum"] = self.checksum(0x488, data[:3])
     return self.packer.make_can_msg("DAS_steeringControl", CANBUS.party, values)
 
-  def create_longitudinal_command(self, acc_state, accel, cntr, active):
+  def create_longitudinal_command(self, acc_state, accel, cntr, active, aeb_active=False):
     values = {
       "DAS_setSpeed": 0 if (accel < 0 or not active) else V_CRUISE_MAX,
       "DAS_accState": acc_state,
-      "DAS_aebEvent": 0,
+      "DAS_aebEvent": 1 if aeb_active else 0,
       "DAS_jerkMin": CarControllerParams.JERK_LIMIT_MIN,
       "DAS_jerkMax": CarControllerParams.JERK_LIMIT_MAX,
       "DAS_accelMin": accel,
