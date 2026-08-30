@@ -652,6 +652,7 @@ struct CarParams {
     chery @36;  # covers Chery/Omoda/iCaur/JAECOO (chery.h) — no dev/EDP10 equivalent yet
     mg @37;     # ported from dragonpilot's opendbc; dragonpilot uses mg@35 but that
                 # collides with byd here — 37 is this fork's own next-free slot
+    gwm @38;    # matches commaai/opendbc#3263 (GWM Haval H6) numbering
   }
 
   enum SteerControlType {

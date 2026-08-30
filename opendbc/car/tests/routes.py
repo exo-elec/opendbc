@@ -18,6 +18,7 @@ from opendbc.car.body.values import CAR as COMMA
 from opendbc.car.psa.values import CAR as PSA
 from opendbc.car.byd.values import CAR as BYD
 from opendbc.car.chery.values import CAR as CHERY
+from opendbc.car.gwm.values import CAR as GWM
 from opendbc.car.mg.values import CAR as MG
 
 # FIXME: add routes for these cars
@@ -55,6 +56,9 @@ non_tested_cars = [
   # MG ZS (no comma.ai test route yet; no CAN/FW fingerprint either - forced
   # selection only, see opendbc/car/mg/fingerprints.py)
   MG.MG_ZS,
+
+  # GWM Haval H6, ported from commaai/opendbc#3263 (no comma.ai test route yet)
+  GWM.GWM_HAVAL_H6,
 ]
 
 

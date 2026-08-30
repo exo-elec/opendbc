@@ -129,3 +129,6 @@ legend = ["LAT_ACCEL_FACTOR", "MAX_LAT_ACCEL_MEASURED", "FRICTION"]
 "CHERY_TIGGO_8_PRO" = [2.5, 2.5, 0.1]
 "CHERY_OMODA_5" = [2.5, 2.5, 0.1]
 "CHERY_JAECOO_6T" = [2.5, 2.5, 0.1]
+
+# GWM Haval H6 - ported from commaai/opendbc#3263, no measured MAX_LAT_ACCEL yet
+"GWM_HAVAL_H6" = [2.5, 2.5, 0.1]

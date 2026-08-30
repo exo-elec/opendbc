@@ -43,7 +43,10 @@
 > adds BYD and Chery/Omoda/iCaur/JAECOO car support, ported from
 > [kommuai/opendbc](https://github.com/kommuai/opendbc). See
 > [the port writeup](docs/BYD_CHERY_JAECOO_PORT.md) for provenance and known
-> gaps before pinning it anywhere.
+> gaps before pinning it anywhere. It also wires in GWM Haval H6 support,
+> ported from the open, comma-reviewed [commaai/opendbc#3263](https://github.com/commaai/opendbc/pull/3263)
+> (unmerged upstream); longitudinal control stays behind `ALLOW_DEBUG`
+> pending comma's own validation.
 
 ---
 
