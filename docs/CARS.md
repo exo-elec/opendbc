@@ -35,7 +35,7 @@
 |Audi|RS3 2018|Adaptive Cruise Control (ACC) & Lane Assist|[Upstream](#upstream)|
 |Audi|S3 2015-17|Adaptive Cruise Control (ACC) & Lane Assist|[Upstream](#upstream)|
 |BYD|Atto 3 2023-26|ALL|[Upstream](#upstream)|
-|BYD|Dolphin 2023-26|ALL|[Upstream](#upstream)|
+|BYD|Dolphin 2023-26|ALL|[Community](#community)|
 |BYD|M6 2024-26|ALL|[Upstream](#upstream)|
 |BYD|Seal 6 2025-26|ALL|[Upstream](#upstream)|
 |BYD|Seal 2024-26|ALL|[Upstream](#upstream)|

@@ -5,7 +5,7 @@ from enum import Enum, IntEnum, IntFlag
 from opendbc.car import CarSpecs, DbcDict, PlatformConfig, Platforms, dbc_dict
 from opendbc.car.byd.angle_rate_limit import AngleRateLimit
 from opendbc.car.lateral import AngleSteeringLimits
-from opendbc.car.docs_definitions import CarDocs, CarParts, CUSTOM_CAR_PARTS, CarFootnote, Column
+from opendbc.car.docs_definitions import CarDocs, CarParts, CUSTOM_CAR_PARTS, CarFootnote, Column, SupportType
 
 
 @dataclass
@@ -109,11 +109,19 @@ class CAR(Platforms):
         variant="All",
         **BYD_SUPPORT_COMMON_FIELDS,
       ),
+      # Dolphin here rides on BYD_SEAL's fingerprint/DBC/interface with no
+      # dedicated Dolphin fingerprint or validation of its own - inherited
+      # from an unmerged export-market PR's stated future intent, not from
+      # anyone confirming it against a real Dolphin. See the "BYD Dolphin"
+      # section of docs/BYD_ATTO3_COMMUNITY_LINEAGE.md. Marked COMMUNITY
+      # rather than the default UPSTREAM until that's checked.
       BYDCarDocs(
         "BYD Dolphin 2023-26",
         "ALL",
         footnotes=[Footnote.LKC_ACC_STOCK],
         variant="All",
+        support_type=SupportType.COMMUNITY,
+        support_link="#community",
         **BYD_SUPPORT_COMMON_FIELDS,
       ),
     ],
