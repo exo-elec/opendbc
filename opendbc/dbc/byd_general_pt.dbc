@@ -326,3 +326,5 @@ VAL_ 578 GEAR 4 "D" 2 "R" 1 "P" ;
 VAL_ 813 SET_DISTANCE 8 "4bar" 4 "3bar" 2 "2bar" 1 "1bar" ;
 VAL_ 813 NOTIFY 4 "OVERRIDE" 3 "ENGAGE" 2 "DISENGAGE" 7 "ACC_ON" 8 "ACC_OFF" 0 "NONE";
 VAL_ 813 CRUISE_STATE 0 "OFF" 1 "Passive" 2 "StandBy" 3 "Active" 4 "BrakeOnly" 5 "Override" 6 "StandStillActive" 7 "StandStillWait" 8 "Failure" 9 "PermanentFailure";
+
+CM_ SG_ 482 EPS_OK "Crosscheck 2026-08 vs qzwf/opendbc's independent RE of this same message (STEERING_MODULE_ADAS, bit 20): qzwf calls this bit STEER_REQ_ACTIVE_LOW (an inverse mirror of STEER_REQ at bit 21), not an EPS health flag. Every other signal in this message (STEER_ANGLE, COUNTER, CHECKSUM, STEER_REQ, and all SET_ME_* constants) matches qzwf's layout bit-for-bit. This bit feeds lkas_healthy in opendbc/car/byd/cam_lka/carstate.py - unresolved without a local capture, not changed here. See docs/BYD_ATTO3_COMMUNITY_LINEAGE.md.";

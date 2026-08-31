@@ -548,3 +548,56 @@ local capture than the current Atto3-derived placeholder. Flagged inline
 on all four branches (`CM_ BO_` comment on the steering command message,
 no signal changes) rather than silently replaced, since none of this is
 backed by a local capture yet either way.
+
+## Update (2026-08-19): qzwf/opendbc got a real BYD Atto 3 test route - closer than expected, one open bit
+
+`qzwf/openpilot`'s `master` branch (not the `byd-atto3-stable` branch this
+doc checked earlier) now pins `qzwf/opendbc` commit `fbcbc579` ("BYD ATTO3:
+add test route"), adding a real, public, uploaded rlog route
+(`b8b2d1a1df1b3aad/000000a0--7c51639c22`) for BYD Atto 3, plus two small
+`opendbc/car/tests/test_models.py` changes needed to make it pass: an
+`ANGLE_DEG_TO_CAN["byd"] = 10` entry, and a `BRANDS_SILENT_WHEN_INACTIVE`
+exemption from the `>50 messages sent` TX-count check for `test_panda_safety_tx_cases`
+(byd stays silent unless it is actively steering, per their carcontroller).
+
+Checked whether this is directly usable against this fork's own
+`opendbc/car/byd/` (angle control, `byd_general_pt.dbc`) rather than
+assuming the two lineages are unrelated:
+
+- **DBC bit layout: closer than assumed.** Comparing `qzwf/opendbc`'s
+  `STEERING_MODULE_ADAS` (0x1E2, `byd_general.dbc`) against this fork's
+  `byd_general_pt.dbc` message 482 signal-by-signal: `STEER_ANGLE`,
+  `COUNTER`, `CHECKSUM`, `STEER_REQ`, and every `SET_ME_*` constant are
+  **bit-identical** between the two. Only one signal disagrees: bit 20,
+  which this fork calls `EPS_OK` (an EPS health flag, feeding
+  `lkas_healthy` in `opendbc/car/byd/cam_lka/carstate.py`) and qzwf calls
+  `STEER_REQ_ACTIVE_LOW` (an inverted mirror of the `STEER_REQ` bit at
+  position 21). Annotated with a `CM_ SG_ 482 EPS_OK` comment on
+  `byd_general_pt.dbc` rather than guessed at - unresolved without a local
+  capture, same as every other open item in this doc.
+- **TX cadence is genuinely different, and that part doesn't transfer.**
+  qzwf's carcontroller sends nothing while not actively steering (hence
+  their `BRANDS_SILENT_WHEN_INACTIVE` test change). This fork's
+  `cam_lka/carcontroller.py` sends a steering frame every cycle regardless
+  of `lat_active` (a no-op passthrough angle when inactive), and
+  `byd_fwd_hook` in `opendbc/safety/modes/byd.h` blocks the camera's native
+  0x1E2/0x316 unconditionally, matching that continuous-TX design. This
+  fork's existing `>50 messages` TX check should already hold for
+  `BYD_ATTO3` without qzwf's exemption - not imported.
+- **Could not replay the actual rlog to confirm.** This sandbox's network
+  policy blocks `commadataci.blob.core.windows.net` and (by the same
+  policy) presumably `api.commadotai.com`, which is where
+  `opendbc/car/tests/test_models.py` fetches routes from - confirmed by
+  running the route through this fork's own `TestCarModelBase` directly,
+  which gets exactly as far as the fetch and fails there, not on anything
+  in this fork's wiring.
+
+Given the signal-layout match is much closer than the earlier
+shemps-vs-qzwf 292-line-diff finding suggested for a *different* pair of
+lineages, added `CarTestRoute("b8b2d1a1df1b3aad/000000a0--7c51639c22",
+BYD.BYD_ATTO3, segment=0)` to `opendbc/car/tests/routes.py` (removing
+`BYD_ATTO3` from `non_tested_cars`) so CI - which has real network access -
+becomes the actual check, rather than leaving this unresolved on the
+strength of a doc comparison alone. If it fails, that failure is itself
+the local-capture-equivalent signal this doc has been asking for on every
+other open item; it was not silently assumed to pass.

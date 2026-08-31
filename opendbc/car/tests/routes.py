@@ -39,7 +39,6 @@ non_tested_cars = [
   TOYOTA.TOYOTA_RAV4H,
 
   # BYD (no comma.ai test route yet)
-  BYD.BYD_ATTO3,
   BYD.BYD_M6,
   BYD.BYD_SONG_PLUS_DMI_21,
   BYD.BYD_SEAL,
@@ -70,6 +69,15 @@ class CarTestRoute(NamedTuple):
 
 routes = [
   CarTestRoute("efdf9af95e71cd84/2022-05-13--19-03-31", COMMA.COMMA_BODY),
+
+  # From qzwf/opendbc's own independent BYD Atto 3 port (commit fbcbc579,
+  # 2026-08-13), whose STEERING_MODULE_ADAS (0x1E2) bit layout crosschecks
+  # bit-for-bit against this fork's byd_general_pt.dbc except one signal
+  # (see the CM_ SG_ 482 EPS_OK comment there and
+  # docs/BYD_ATTO3_COMMUNITY_LINEAGE.md) - not independently replayed against
+  # this fork's own carstate/safety code before adding it here (this sandbox
+  # can't reach comma's route storage), so let CI be the first real check.
+  CarTestRoute("b8b2d1a1df1b3aad/000000a0--7c51639c22", BYD.BYD_ATTO3, segment=0),
 
   CarTestRoute("c5e3aa51055c8f47|2023-12-06--20-01-44", CHRYSLER.JEEP_CHEROKEE_5TH_GEN),
   CarTestRoute("0c94aa1e1296d7c6/2021-05-05--19-48-37", CHRYSLER.JEEP_GRAND_CHEROKEE),
