@@ -22,7 +22,7 @@ static bool mg_zs_ev_brake = false;
 static bool mg_non_ev = false;
 
 static void mg_rx_hook(const CANPacket_t *msg) {
-  if (msg->bus == 0U)  {
+  if (msg->bus == 0U) {
     // Vehicle speed
     if (msg->addr == 0x23cU) {
       float speed = (((msg->data[2] & 0x7FU) << 8) | msg->data[3]) * 0.015625;

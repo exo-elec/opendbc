@@ -1,8 +1,8 @@
 def calc_checksum(values):
-  lka_req_toq = values['LKAReqToqHSC2'] + 1024
-  lka_req_toq_sts = values['LKAReqToqStsHSC2']
-  lka_req_toq_v = values['LKAReqToqVHSC2']
-  lka_alv_rc = values['LKAAlvRCHSC2']
+  lka_req_toq = values["LKAReqToqHSC2"] + 1024
+  lka_req_toq_sts = values["LKAReqToqStsHSC2"]
+  lka_req_toq_v = values["LKAReqToqVHSC2"]
+  lka_alv_rc = values["LKAAlvRCHSC2"]
 
   combined = ((lka_req_toq << 1) | (lka_req_toq_sts << 12) | lka_req_toq_v) & 0x3FFF
   with_counter = (combined + lka_alv_rc) & 0x3FFF
