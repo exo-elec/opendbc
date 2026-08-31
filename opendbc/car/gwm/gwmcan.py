@@ -137,7 +137,7 @@ def create_buttons_command(packer, CAN: CanBus, counter, stock_msg, cancel_comma
   data = packer.make_can_msg("STEER_AND_AP_STALK", 0, values)[1]
   values["CRC_X2D"] = checksum(data[1:8], 0x2D)
 
-  return packer.make_can_msg('STEER_AND_AP_STALK', CAN.camera, values)
+  return packer.make_can_msg("STEER_AND_AP_STALK", CAN.camera, values)
 
 
 def create_hud_command(packer, CAN: CanBus, hud_stock_values, steer_required):

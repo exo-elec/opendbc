@@ -13,13 +13,13 @@ class CarInterface(CarInterfaceBase):
   CarController = CarController
 
   def __init__(self, CP):
-      super().__init__(CP)
-      self.lat_active = False
-      self.isEPSobeying = True
-      self.steer_fault_temporary_counter = 0
-      self.current_personality = 0
-      self.pcm_follow_distance = 0
-      self.press_gac_button = False
+    super().__init__(CP)
+    self.lat_active = False
+    self.eps_obeying = True
+    self.steer_fault_temporary_counter = 0
+    self.current_personality = 0
+    self.pcm_follow_distance = 0
+    self.press_gac_button = False
 
   def apply(self, CC, now_nanos):
     self.lat_active = CC.latActive
@@ -29,8 +29,8 @@ class CarInterface(CarInterfaceBase):
 
   def update(self, can_packets):
     cp = self.can_parsers[Bus.main]
-    self.isEPSobeying = cp.vl["RX_STEER_RELATED"]["A_RX_STEER_REQUESTED"] == 1
-    self.steer_fault_temporary_counter = (self.steer_fault_temporary_counter + 1) if (self.lat_active and not self.isEPSobeying) \
+    self.eps_obeying = cp.vl["RX_STEER_RELATED"]["A_RX_STEER_REQUESTED"] == 1
+    self.steer_fault_temporary_counter = (self.steer_fault_temporary_counter + 1) if (self.lat_active and not self.eps_obeying) \
                                           else 0
 
     cp_cam = self.can_parsers[Bus.cam]
@@ -49,7 +49,7 @@ class CarInterface(CarInterfaceBase):
 
   @staticmethod
   def _get_params(ret: structs.CarParams, candidate, fingerprint, car_fw, alpha_long, is_release, docs) -> structs.CarParams:
-    ret.brand = 'gwm'
+    ret.brand = "gwm"
 
     ret.safetyConfigs = [get_safety_config(structs.CarParams.SafetyModel.gwm)]
 

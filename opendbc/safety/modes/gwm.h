@@ -2,27 +2,30 @@
 
 #include "opendbc/safety/declarations.h"
 
-// GWM Haval H6 - ported from commaai/opendbc#3263 (AlexandreSato), 2026-08.
-#define GWM_ADAS_ACTIVATION      0xA1U // RX from STEER_AND_AP_STALK
-#define GWM_GAS                  0x60U // RX from CAR_OVERALL_SIGNALS
-#define GWM_BRAKE               0x120U // RX from BRAKE2
-#define GWM_SPEED               0x13BU // RX from WHEEL_SPEEDS
-#define GWM_RX_STEER_RELATED    0x147U // RX from EPS to CAMERA
-#define GWM_STEER_CMD           0x12BU // TX from OP to EPS
-#define GWM_CRUISE              0x2ABU
-#define GWM_LONG_CONTROL        0x143U // TX from OP to PCM
-#define GWM_BLIND_SPOT          0x16FU
-#define GWM_HUD                 0x23DU
+// GWM Haval H6 - ported from open PR commaai/opendbc#3263 (AlexandreSato)
+// onto this fork's core, 2026-08. Longitudinal stays under ALLOW_DEBUG,
+// matching the source PR, pending comma's own validation.
+#define GWM_ADAS_ACTIVATION  0xA1U  // RX from STEER_AND_AP_STALK
+#define GWM_GAS              0x60U  // RX from CAR_OVERALL_SIGNALS
+#define GWM_BRAKE            0x120U // RX from BRAKE2
+#define GWM_SPEED            0x13BU // RX from WHEEL_SPEEDS
+#define GWM_RX_STEER_RELATED 0x147U // RX from EPS to CAMERA
+#define GWM_STEER_CMD        0x12BU // TX from OP to EPS
+#define GWM_CRUISE           0x2ABU
+#define GWM_LONG_CONTROL     0x143U // TX from OP to PCM
+#define GWM_BLIND_SPOT       0x16FU
+#define GWM_HUD              0x23DU
 
 // CAN bus
-#define GWM_MAIN_BUS 0U
-#define GWM_CAMERA_BUS  2U
+#define GWM_MAIN_BUS   0U
+#define GWM_CAMERA_BUS 2U
 
 static uint8_t gwm_get_counter(const CANPacket_t *msg) {
   uint8_t cnt = 0;
   if ((msg->addr == GWM_SPEED) || (msg->addr == GWM_ADAS_ACTIVATION)) {
     cnt = msg->data[7] & 0xFU;
   } else {
+    /* no action */
   }
   return cnt;
 }
@@ -32,6 +35,7 @@ static uint32_t gwm_get_checksum(const CANPacket_t *msg) {
   if ((msg->addr == GWM_SPEED) || (msg->addr == GWM_ADAS_ACTIVATION)) {
     chksum = msg->data[0] & 0xFFU;
   } else {
+    /* no action */
   }
   return chksum;
 }
@@ -59,6 +63,7 @@ static uint32_t gwm_compute_checksum(const CANPacket_t *msg) {
   } else if (msg->addr == GWM_SPEED) {
     xor_out = 0x7FU;
   } else {
+    /* no action */
   }
   chksum = crc ^ xor_out;
   return chksum;
@@ -188,12 +193,12 @@ static safety_config gwm_init(uint16_t param) {
   };
 
   bool gwm_longitudinal = false;
-  #ifdef ALLOW_DEBUG
-   const int FLAG_GWM_LONG_CONTROL = 1;
-   gwm_longitudinal = GET_FLAG(param, FLAG_GWM_LONG_CONTROL);
- #else
-   SAFETY_UNUSED(param);
- #endif
+#ifdef ALLOW_DEBUG
+  const int FLAG_GWM_LONG_CONTROL = 1;
+  gwm_longitudinal = GET_FLAG(param, FLAG_GWM_LONG_CONTROL);
+#else
+  SAFETY_UNUSED(param);
+#endif
 
   // FIXME: cppcheck thinks that gwm_longitudinal is always false. This is not true
   // if ALLOW_DEBUG is defined but cppcheck is run without ALLOW_DEBUG

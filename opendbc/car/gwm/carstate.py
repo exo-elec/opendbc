@@ -1,9 +1,10 @@
-from opendbc.car import Bus, CanBusBase, structs
+import copy
+
 from opendbc.can.parser import CANParser
+from opendbc.car import Bus, CanBusBase, structs
 from opendbc.car.common.conversions import Conversions as CV
 from opendbc.car.interfaces import CarStateBase
 from opendbc.car.gwm.values import DBC
-import copy
 
 GearShifter = structs.CarState.GearShifter
 TransmissionType = structs.CarParams.TransmissionType
