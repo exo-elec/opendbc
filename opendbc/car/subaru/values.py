@@ -3,7 +3,7 @@ from enum import Enum, IntFlag
 
 from opendbc.car import Bus, CarSpecs, DbcDict, PlatformConfig, Platforms, uds
 from opendbc.car.structs import CarParams
-from opendbc.car.docs_definitions import CarFootnote, CarHarness, CarDocs, CarParts, Tool, Column
+from opendbc.car.docs_definitions import CarFootnote, CarHarness, CarDocs, CarParts, Column
 from opendbc.car.fw_query_definitions import FwQueryConfig, Request, StdQueries, p16
 
 Ecu = CarParams.Ecu
@@ -53,10 +53,10 @@ class CarControllerParams:
   BRAKE_LOOKUP_V = [BRAKE_MAX, BRAKE_MIN]
 
 
-class SubaruPandaFlags(IntFlag):
-  FLAG_SUBARU_GEN2 = 1
-  FLAG_SUBARU_LONG = 2
-  FLAG_SUBARU_PREGLOBAL_REVERSED_DRIVER_TORQUE = 4
+class SubaruSafetyFlags(IntFlag):
+  GEN2 = 1
+  LONG = 2
+  PREGLOBAL_REVERSED_DRIVER_TORQUE = 4
 
 
 class SubaruFlags(IntFlag):
@@ -101,9 +101,7 @@ class SubaruCarDocs(CarDocs):
   footnotes: list[Enum] = field(default_factory=lambda: [Footnote.GLOBAL])
 
   def init_make(self, CP: CarParams):
-    self.car_parts.parts.extend([Tool.socket_8mm_deep, Tool.pry_tool])
-
-    if CP.experimentalLongitudinalAvailable:
+    if CP.alphaLongitudinalAvailable:
       self.footnotes.append(Footnote.EXP_LONG)
 
 
@@ -142,8 +140,8 @@ class CAR(Platforms):
   SUBARU_IMPREZA = SubaruPlatformConfig(
     [
       SubaruCarDocs("Subaru Impreza 2017-19"),
-      SubaruCarDocs("Subaru Crosstrek 2018-19", video_link="https://youtu.be/Agww7oE1k-s?t=26"),
-      SubaruCarDocs("Subaru XV 2018-19", video_link="https://youtu.be/Agww7oE1k-s?t=26"),
+      SubaruCarDocs("Subaru Crosstrek 2018-19", video="https://youtu.be/Agww7oE1k-s?t=26"),
+      SubaruCarDocs("Subaru XV 2018-19", video="https://youtu.be/Agww7oE1k-s?t=26"),
     ],
     CarSpecs(mass=1568, wheelbase=2.67, steerRatio=15),
   )
@@ -228,6 +226,7 @@ SUBARU_ALT_VERSION_RESPONSE = bytes([uds.SERVICE_TYPE.READ_DATA_BY_IDENTIFIER + 
   p16(0xf100)
 
 FW_QUERY_CONFIG = FwQueryConfig(
+  fw_version_regex=br"(?:[\x00-\xff]{4,5}|[\x00-\xff]{8}|[\x00-\xff]{10})",
   requests=[
     Request(
       [StdQueries.TESTER_PRESENT_REQUEST, SUBARU_VERSION_REQUEST],
@@ -275,7 +274,7 @@ FW_QUERY_CONFIG = FwQueryConfig(
   ],
   # We don't get the EPS from non-OBD queries on GEN2 cars. Note that we still attempt to match when it exists
   non_essential_ecus={
-    Ecu.eps: list(CAR.with_flags(SubaruFlags.GLOBAL_GEN2)),
+    Ecu.eps: [c for c in CAR if c.config.flags & SubaruFlags.GLOBAL_GEN2],
   }
 )
 

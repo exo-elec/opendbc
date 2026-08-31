@@ -1,16 +1,38 @@
 from dataclasses import dataclass, field
-from enum import IntFlag
-from opendbc.car import Bus, CarSpecs, DbcDict,  PlatformConfig, Platforms, AngleRateLimit
+from enum import Enum, IntFlag
+from opendbc.car import Bus, CarSpecs, DbcDict, PlatformConfig, Platforms
+from opendbc.car.lateral import AngleSteeringLimitsVM
 from opendbc.car.structs import CarParams, CarState
-from opendbc.car.docs_definitions import CarDocs
+from opendbc.car.docs_definitions import CarDocs, CarFootnote, CarHarness, CarParts, Column
 from opendbc.car.fw_query_definitions import FwQueryConfig, Request, StdQueries
 
 Ecu = CarParams.Ecu
 
 
+class Footnote(Enum):
+  HW_TYPE = CarFootnote(
+    "Some 2023 model years have HW4. To check which hardware type your vehicle has, look for " +
+    "<b>Autopilot computer</b> under <b>Software -> Additional Vehicle Information</b> on your vehicle's touchscreen. </br></br>" +
+    "See <a href=\"https://www.notateslaapp.com/news/2173/how-to-check-if-your-tesla-has-hardware-4-ai4-or-hardware-3\">this page</a> for more information.",
+    Column.MODEL)
+
+  SETUP = CarFootnote(
+    "See more setup details for <a href=\"https://github.com/commaai/openpilot/wiki/tesla\" target=\"_blank\">Tesla</a>.",
+    Column.MAKE, setup_note=True)
+
+
 @dataclass
-class TeslaCarDocs(CarDocs):
-  package: str = "Traffic Aware Cruise Control"
+class TeslaCarDocsHW3(CarDocs):
+  package: str = "All"
+  car_parts: CarParts = field(default_factory=CarParts.common([CarHarness.tesla_a]))
+  footnotes: list[Enum] = field(default_factory=lambda: [Footnote.HW_TYPE, Footnote.SETUP])
+
+
+@dataclass
+class TeslaCarDocsHW4(CarDocs):
+  package: str = "All"
+  car_parts: CarParts = field(default_factory=CarParts.common([CarHarness.tesla_b]))
+  footnotes: list[Enum] = field(default_factory=lambda: [Footnote.HW_TYPE, Footnote.SETUP])
 
 
 @dataclass
@@ -20,26 +42,54 @@ class TeslaPlatformConfig(PlatformConfig):
 
 class CAR(Platforms):
   TESLA_MODEL_3 = TeslaPlatformConfig(
-    [TeslaCarDocs("Tesla Model 3 2019-24")],
+    [
+      # TODO: do we support 2017? It's HW3
+      TeslaCarDocsHW3("Tesla Model 3 (with HW3) 2019-23"),
+      TeslaCarDocsHW4("Tesla Model 3 (with HW4) 2024-25"),
+    ],
     CarSpecs(mass=1899., wheelbase=2.875, steerRatio=12.0),
+    {Bus.party: 'tesla_model3_party', Bus.radar: 'tesla_radar_continental_generated'},
   )
   TESLA_MODEL_Y = TeslaPlatformConfig(
-    [TeslaCarDocs("Tesla Model Y 2020-24")],
+    [
+      TeslaCarDocsHW3("Tesla Model Y (with HW3) 2020-23"),
+      TeslaCarDocsHW4("Tesla Model Y (with HW4) 2024-25"),
+    ],
     CarSpecs(mass=2072., wheelbase=2.890, steerRatio=12.0),
+    {Bus.party: 'tesla_model3_party', Bus.radar: 'tesla_radar_continental_generated'},
+  )
+  TESLA_MODEL_X = TeslaPlatformConfig(
+    [TeslaCarDocsHW4("Tesla Model X (with HW4) 2024")],
+    CarSpecs(mass=2495., wheelbase=2.960, steerRatio=12.0),
   )
 
 
 FW_QUERY_CONFIG = FwQueryConfig(
+  fw_version_regex=br".+,[EYX]\d?[A-Z]*\d{3}\.\d+(?:\.\d+)?",
   requests=[
     Request(
       [StdQueries.TESTER_PRESENT_REQUEST, StdQueries.SUPPLIER_SOFTWARE_VERSION_REQUEST],
       [StdQueries.TESTER_PRESENT_RESPONSE, StdQueries.SUPPLIER_SOFTWARE_VERSION_RESPONSE],
-      whitelist_ecus=[Ecu.eps],
-      rx_offset=0x08,
       bus=0,
     )
   ]
 )
+
+# Cars with this EPS FW have FSD 14 and use TeslaFlags.FSD_14
+FSD_14_FW = {
+  CAR.TESLA_MODEL_3: [
+    b'TeMYG4_Main_0.0.0 (77),E4HP015.04.5',
+    b'TeMYG4_Main_0.0.0 (78),E4HP015.05.0',
+    b'TeMYG4_Main_0.0.0 (77),E4H015.04.5',
+    b'TeMYG4_Main_0.0.0 (78),E4H015.05.0',
+  ],
+  CAR.TESLA_MODEL_Y: [
+    b'TeMYG4_Legacy3Y_0.0.0 (6),Y4003.04.0',
+    b'TeMYG4_Main_0.0.0 (77),Y4003.05.4',
+    b'TeMYG4_Main_0.0.0 (78),Y4003.06.0',
+  ]
+}
+
 
 class CANBUS:
   party = 0
@@ -56,30 +106,33 @@ GEAR_MAP = {
   "DI_GEAR_SNA": CarState.GearShifter.unknown,
 }
 
-class CarControllerParams:
-  ANGLE_RATE_LIMIT_UP = AngleRateLimit(speed_bp=[0., 5., 15.], angle_v=[10., 1.6, .3])
-  ANGLE_RATE_LIMIT_DOWN = AngleRateLimit(speed_bp=[0., 5., 15.], angle_v=[10., 7.0, 0.8])
-  # Research-supported outer bound for ordinary cruise/following control.
-  # Stronger requests must be explicitly marked as AEB by the Tesla CAN layer.
-  ACCEL_MIN_COMFORT = -2.5  # m/s^2
 
-  # Tesla DAS_control's encoded actuator range. This is a protocol/controller
-  # ceiling, not a normal-cruise comfort target and not evidence of UN R152
-  # AEBS compliance. See docs/eop/AEB_LONGITUDINAL_ENVELOPE.md.
-  ACCEL_MIN = -3.48  # m/s^2
+class CarControllerParams:
+  ANGLE_LIMITS: AngleSteeringLimitsVM = AngleSteeringLimitsVM(
+    # EPAS faults above this angle
+    360,  # deg
+    # limit angle rate to both prevent a fault and for low speed comfort (~12 mph rate down to 0 mph)
+    MAX_ANGLE_RATE=5,  # deg/20ms frame, EPS faults at 12 at a standstill
+  )
+
+  STEER_STEP = 2  # Angle command is sent at 50 Hz
   ACCEL_MAX = 2.0    # m/s^2
+  ACCEL_MIN = -3.48  # m/s^2
   JERK_LIMIT_MAX = 4.9  # m/s^3, ACC faults at 5.0
   JERK_LIMIT_MIN = -4.9  # m/s^3, ACC faults at 5.0
 
 
-class TeslaPandaFlags(IntFlag):
-  FLAG_TESLA_POWERTRAIN = 1
-  FLAG_TESLA_LONG_CONTROL = 2
-  FLAG_TESLA_RAVEN = 4
+class TeslaSafetyFlags(IntFlag):
+  LONG_CONTROL = 1
+  FSD_14 = 2
 
 
 class TeslaFlags(IntFlag):
-  FLAG_TESLA_LONG_CONTROL = 1
+  LONG_CONTROL = 1
+  FSD_14 = 2
+  MISSING_DAS_SETTINGS = 4
 
 
 DBC = CAR.create_dbc_map()
+
+STEER_THRESHOLD = 1

@@ -1,36 +1,47 @@
 from dataclasses import dataclass, field
-from enum import IntFlag
+from enum import Enum, IntFlag
 
-from opendbc.car import AngleRateLimit, Bus, CarSpecs, DbcDict, PlatformConfig, Platforms, uds
+from opendbc.car import Bus, CarSpecs, DbcDict, PlatformConfig, Platforms, uds
+from opendbc.car.lateral import AngleSteeringLimits
 from opendbc.car.structs import CarParams
-from opendbc.car.docs_definitions import CarDocs, CarHarness, CarParts
+from opendbc.car.docs_definitions import CarDocs, CarFootnote, CarHarness, CarParts, Column
 from opendbc.car.fw_query_definitions import FwQueryConfig, Request, StdQueries
 
 Ecu = CarParams.Ecu
 
 
 class CarControllerParams:
-  ANGLE_RATE_LIMIT_UP = AngleRateLimit(speed_bp=[0., 5., 15.], angle_v=[5., .8, .15])
-  ANGLE_RATE_LIMIT_DOWN = AngleRateLimit(speed_bp=[0., 5., 15.], angle_v=[5., 3.5, 0.4])
+  ANGLE_LIMITS: AngleSteeringLimits = AngleSteeringLimits(
+    # When output steering Angle not within range -1311 and 1310,
+    #   CANPacker packs wrong angle output to be decoded by panda
+    600,  # deg, reasonable limit
+    ([0., 5., 15.], [5., .8, .15]),
+    ([0., 5., 15.], [5., 3.5, 0.4]),
+  )
+
+  LKAS_MIN_TORQUE = 0.2             # Adequate torque when overriding without faulting
   LKAS_MAX_TORQUE = 1               # A value of 1 is easy to overpower
   STEER_THRESHOLD = 1.0
-
-  # When output steering Angle not within range -1311 and 1310,
-  #   CANPacker packs wrong angle output to be decoded by panda
-  MAX_STEER_ANGLE = 1310
 
   def __init__(self, CP):
     pass
 
 
-class NissanPandaFlags(IntFlag):
-  FLAG_NISSAN_ALT_EPS_BUS = 1
+class NissanSafetyFlags(IntFlag):
+  ALT_EPS_BUS = 1
+
+
+class Footnote(Enum):
+  SETUP = CarFootnote(
+    "See more setup details for <a href=\"https://github.com/commaai/openpilot/wiki/nissan\" target=\"_blank\">Nissan</a>.",
+    Column.MAKE, setup_note=True)
 
 
 @dataclass
 class NissanCarDocs(CarDocs):
   package: str = "ProPILOT Assist"
   car_parts: CarParts = field(default_factory=CarParts.common([CarHarness.nissan_a]))
+  footnotes: list[Enum] = field(default_factory=lambda: [Footnote.SETUP])
 
 
 @dataclass(frozen=True)
@@ -50,7 +61,7 @@ class CAR(Platforms):
     NissanCarSpecs(mass=1610, wheelbase=2.705)
   )
   NISSAN_LEAF = NissanPlatformConfig(
-    [NissanCarDocs("Nissan Leaf 2018-23", video_link="https://youtu.be/vaMbtAh_0cY")],
+    [NissanCarDocs("Nissan Leaf 2018-23", video="https://youtu.be/vaMbtAh_0cY")],
     NissanCarSpecs(mass=1610, wheelbase=2.705),
     {Bus.pt: 'nissan_leaf_2018_generated'},
   )
@@ -62,7 +73,7 @@ class CAR(Platforms):
     NissanCarSpecs(mass=1610, wheelbase=2.705)
   )
   NISSAN_ALTIMA = NissanPlatformConfig(
-    [NissanCarDocs("Nissan Altima 2019-20", car_parts=CarParts.common([CarHarness.nissan_b]))],
+    [NissanCarDocs("Nissan Altima 2019-24", car_parts=CarParts.common([CarHarness.nissan_b]))],
     NissanCarSpecs(mass=1492, wheelbase=2.824)
   )
 
@@ -82,34 +93,48 @@ NISSAN_VERSION_RESPONSE_KWP = b'\x61\x83'
 
 NISSAN_RX_OFFSET = 0x20
 
+# TODO: once we gather enough Altima data on PT bus (1), we can remove OBD queries to speed up fingerprinting
 FW_QUERY_CONFIG = FwQueryConfig(
-  requests=[request for bus, logging in ((0, False), (1, True)) for request in [
+  fw_version_regex=br"(?:[A-Z0-9]{10}|[\x00-\xff]{24})",
+  requests=[request for bus, obd_multiplexing in ((0, False), (1, False), (1, True)) for request in [
     Request(
       [NISSAN_DIAGNOSTIC_REQUEST_KWP, NISSAN_VERSION_REQUEST_KWP],
       [NISSAN_DIAGNOSTIC_RESPONSE_KWP, NISSAN_VERSION_RESPONSE_KWP],
       bus=bus,
-      logging=logging,
+      logging=obd_multiplexing,
+      obd_multiplexing=obd_multiplexing,
     ),
     Request(
       [NISSAN_DIAGNOSTIC_REQUEST_KWP, NISSAN_VERSION_REQUEST_KWP],
       [NISSAN_DIAGNOSTIC_RESPONSE_KWP, NISSAN_VERSION_RESPONSE_KWP],
       rx_offset=NISSAN_RX_OFFSET,
       bus=bus,
-      logging=logging,
+      logging=obd_multiplexing,
+      obd_multiplexing=obd_multiplexing,
     ),
     # Rogue's engine solely responds to this
     Request(
       [NISSAN_DIAGNOSTIC_REQUEST_KWP_2, NISSAN_VERSION_REQUEST_KWP],
       [NISSAN_DIAGNOSTIC_RESPONSE_KWP_2, NISSAN_VERSION_RESPONSE_KWP],
       bus=bus,
-      logging=logging,
+      logging=obd_multiplexing,
+      obd_multiplexing=obd_multiplexing,
     ),
     Request(
       [StdQueries.MANUFACTURER_SOFTWARE_VERSION_REQUEST],
       [StdQueries.MANUFACTURER_SOFTWARE_VERSION_RESPONSE],
       rx_offset=NISSAN_RX_OFFSET,
       bus=bus,
-      logging=logging,
+      logging=obd_multiplexing,
+      obd_multiplexing=obd_multiplexing,
+    ),
+    # Some newer Altima engines respond at normal rx offset
+    Request(
+      [StdQueries.MANUFACTURER_SOFTWARE_VERSION_REQUEST],
+      [StdQueries.MANUFACTURER_SOFTWARE_VERSION_RESPONSE],
+      bus=bus,
+      logging=obd_multiplexing,
+      obd_multiplexing=obd_multiplexing,
     ),
   ]],
 )

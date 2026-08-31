@@ -3,10 +3,10 @@ import re
 from dataclasses import dataclass, field, replace
 from enum import Enum, IntFlag
 
-from opendbc.car import AngleRateLimit, Bus, CarSpecs, DbcDict, PlatformConfig, Platforms, uds
+from opendbc.car import Bus, CarSpecs, DbcDict, PlatformConfig, Platforms, uds
+from opendbc.car.lateral import CurvatureSteeringLimits
 from opendbc.car.structs import CarParams
-from opendbc.car.docs_definitions import CarFootnote, CarHarness, CarDocs, CarParts, Column, \
-                                                     Device, SupportType
+from opendbc.car.docs_definitions import CarFootnote, CarHarness, CarDocs, CarParts, Column
 from opendbc.car.fw_query_definitions import FwQueryConfig, LiveFwVersions, OfflineFwVersions, Request, StdQueries, p16
 
 Ecu = CarParams.Ecu
@@ -20,16 +20,14 @@ class CarControllerParams:
   ACC_UI_STEP = 20      # ACCDATA_3, 5Hz
   BUTTONS_STEP = 5      # Steering_Data_FD1, 10Hz, but send twice as fast
 
-  CURVATURE_MAX = 0.02  # Max curvature for steering command, m^-1
   STEER_DRIVER_ALLOWANCE = 1.0  # Driver intervention threshold, Nm
 
   # Curvature rate limits
   # Max curvature is limited by the EPS to an equivalent of ~2.0 m/s^2 at all speeds,
   #  however max curvature rate linearly decreases as speed increases:
   #  ~0.009 m^-1/sec at 7 m/s, ~0.002 m^-1/sec at 35 m/s
-  # Limit to ~2 m/s^3 up, ~3.3 m/s^3 down at 75 mph and match EPS limit at low speed
-  ANGLE_RATE_LIMIT_UP = AngleRateLimit(speed_bp=[5, 25], angle_v=[0.00045, 0.0001])
-  ANGLE_RATE_LIMIT_DOWN = AngleRateLimit(speed_bp=[5, 25], angle_v=[0.00045, 0.00015])
+  # We observed no windup so we allow higher than EPS
+  CURVATURE_LIMITS: CurvatureSteeringLimits = CurvatureSteeringLimits(0.02)  # Max curvature for steering command, m^-1
   CURVATURE_ERROR = 0.002  # ~6 degrees at 10 m/s, ~10 degrees at 35 m/s
 
   ACCEL_MAX = 2.0               # m/s^2 max acceleration
@@ -41,9 +39,9 @@ class CarControllerParams:
     pass
 
 
-class FordPandaFlags(IntFlag):
-  FLAG_FORD_LONG_CONTROL = 1
-  FLAG_FORD_CANFD = 2
+class FordSafetyFlags(IntFlag):
+  LONG_CONTROL = 1
+  CANFD = 2
 
 
 class FordFlags(IntFlag):
@@ -72,10 +70,13 @@ class FordCarDocs(CarDocs):
 
   def init_make(self, CP: CarParams):
     harness = CarHarness.ford_q4 if CP.flags & FordFlags.CANFD else CarHarness.ford_q3
-    if CP.carFingerprint in (CAR.FORD_BRONCO_SPORT_MK1, CAR.FORD_MAVERICK_MK1, CAR.FORD_F_150_MK14, CAR.FORD_F_150_LIGHTNING_MK1):
-      self.car_parts = CarParts([Device.threex_angled_mount, harness])
-    else:
-      self.car_parts = CarParts([Device.threex, harness])
+    self.car_parts = CarParts.common([harness])
+
+    if harness == CarHarness.ford_q4:
+      self.setup_video = "https://www.youtube.com/watch?v=uUGkH6C_EQU"
+
+    if CP.carFingerprint in (CAR.FORD_F_150_MK14, CAR.FORD_F_150_LIGHTNING_MK1, CAR.FORD_EXPEDITION_MK4):
+      self.setup_video = "https://www.youtube.com/watch?v=MewJc9LYp9M"
 
 
 @dataclass
@@ -106,6 +107,15 @@ class FordCANFDPlatformConfig(FordPlatformConfig):
     self.flags |= FordFlags.CANFD
 
 
+@dataclass
+class FordF150LightningPlatform(FordCANFDPlatformConfig):
+  def init(self):
+    super().init()
+
+    # Don't show in docs until this issue is resolved. See https://github.com/commaai/openpilot/issues/30302
+    self.car_docs = []
+
+
 class CAR(Platforms):
   FORD_BRONCO_SPORT_MK1 = FordPlatformConfig(
     [FordCarDocs("Ford Bronco Sport 2021-24")],
@@ -114,7 +124,15 @@ class CAR(Platforms):
   FORD_ESCAPE_MK4 = FordPlatformConfig(
     [
       FordCarDocs("Ford Escape 2020-22", hybrid=True, plug_in_hybrid=True),
-      FordCarDocs("Ford Kuga 2020-22", "Adaptive Cruise Control with Lane Centering", hybrid=True, plug_in_hybrid=True),
+      FordCarDocs("Ford Kuga 2020-23", "Adaptive Cruise Control with Lane Centering", hybrid=True, plug_in_hybrid=True),
+    ],
+    CarSpecs(mass=1750, wheelbase=2.71, steerRatio=16.7),
+  )
+  FORD_ESCAPE_MK4_5 = FordCANFDPlatformConfig(
+    [
+      FordCarDocs("Ford Escape 2023-24", hybrid=True, plug_in_hybrid=True, setup_video="https://www.youtube.com/watch?v=M6uXf4b2SHM"),
+      FordCarDocs("Ford Kuga Hybrid 2024", "All"),
+      FordCarDocs("Ford Kuga Plug-in Hybrid 2024", "All"),
     ],
     CarSpecs(mass=1750, wheelbase=2.71, steerRatio=16.7),
   )
@@ -125,16 +143,20 @@ class CAR(Platforms):
     ],
     CarSpecs(mass=2050, wheelbase=3.025, steerRatio=16.8),
   )
-  FORD_F_150_MK14 = FordCANFDPlatformConfig(
-    [FordCarDocs("Ford F-150 2022-23", "Co-Pilot360 Assist 2.0", hybrid=True, support_type=SupportType.REVIEW)],
+  FORD_EXPEDITION_MK4 = FordCANFDPlatformConfig(
+    [FordCarDocs("Ford Expedition 2022-24", "Co-Pilot360 Assist 2.0", hybrid=False)],
     CarSpecs(mass=2000, wheelbase=3.69, steerRatio=17.0),
   )
-  FORD_F_150_LIGHTNING_MK1 = FordCANFDPlatformConfig(
-    [FordCarDocs("Ford F-150 Lightning 2022-23", "Co-Pilot360 Assist 2.0", support_type=SupportType.REVIEW)],
+  FORD_F_150_MK14 = FordCANFDPlatformConfig(
+    [FordCarDocs("Ford F-150 2021-23", "Co-Pilot360 Assist 2.0", hybrid=True)],
+    CarSpecs(mass=2000, wheelbase=3.69, steerRatio=17.0),
+  )
+  FORD_F_150_LIGHTNING_MK1 = FordF150LightningPlatform(
+    [FordCarDocs("Ford F-150 Lightning 2022-23", "Co-Pilot360 Assist 2.0")],
     CarSpecs(mass=2948, wheelbase=3.70, steerRatio=16.9),
   )
   FORD_FOCUS_MK4 = FordPlatformConfig(
-    [FordCarDocs("Ford Focus 2018", "Adaptive Cruise Control with Lane Centering", footnotes=[Footnote.FOCUS], hybrid=True)],  # mHEV only
+    [FordCarDocs("Ford Focus 2018-22", "Adaptive Cruise Control with Lane Centering", footnotes=[Footnote.FOCUS], hybrid=True)],  # mHEV only
     CarSpecs(mass=1350, wheelbase=2.7, steerRatio=15.0),
   )
   FORD_MAVERICK_MK1 = FordPlatformConfig(
@@ -145,11 +167,11 @@ class CAR(Platforms):
     CarSpecs(mass=1650, wheelbase=3.076, steerRatio=17.0),
   )
   FORD_MUSTANG_MACH_E_MK1 = FordCANFDPlatformConfig(
-    [FordCarDocs("Ford Mustang Mach-E 2021-23", "All", support_type=SupportType.REVIEW)],
+    [FordCarDocs("Ford Mustang Mach-E 2021-24", "All", setup_video="https://www.youtube.com/watch?v=AR4_eTF3b_A")],
     CarSpecs(mass=2200, wheelbase=2.984, steerRatio=17.0),  # TODO: check steer ratio
   )
   FORD_RANGER_MK2 = FordCANFDPlatformConfig(
-    [FordCarDocs("Ford Ranger 2024", "Adaptive Cruise Control with Lane Centering", support_type=SupportType.REVIEW)],
+    [FordCarDocs("Ford Ranger 2024", "Adaptive Cruise Control with Lane Centering", setup_video="https://www.youtube.com/watch?v=2oJlXCKYOy0")],
     CarSpecs(mass=2000, wheelbase=3.27, steerRatio=17.0),
   )
 
@@ -252,6 +274,7 @@ def ford_asbuilt_block_response(block_id: int):
 
 
 FW_QUERY_CONFIG = FwQueryConfig(
+  fw_version_regex=br"[A-HJ-NP-VX-Z][0-9A-HJ-NP-VX-Z]{3}-[0-9A-HJ-NP-VX-Z]{5,6}-[A-HJ-NP-VX-Z]{2,}\x00*",
   requests=[
     # CAN and CAN FD queries are combined.
     # FIXME: For CAN FD, ECUs respond with frames larger than 8 bytes on the powertrain bus
@@ -266,7 +289,6 @@ FW_QUERY_CONFIG = FwQueryConfig(
       [StdQueries.TESTER_PRESENT_RESPONSE, StdQueries.MANUFACTURER_SOFTWARE_VERSION_RESPONSE],
       whitelist_ecus=[Ecu.abs, Ecu.debug, Ecu.engine, Ecu.eps, Ecu.fwdCamera, Ecu.fwdRadar, Ecu.shiftByWire],
       bus=0,
-      auxiliary=True,
     ),
     *[Request(
       [StdQueries.TESTER_PRESENT_REQUEST, ford_asbuilt_block_request(block_id)],

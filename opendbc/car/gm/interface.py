@@ -1,13 +1,17 @@
 #!/usr/bin/env python3
 import os
 from math import fabs, exp
+import numpy as np
 
-from opendbc.car import get_safety_config, get_friction, structs
+from opendbc.car import get_safety_config, structs
 from opendbc.car.common.basedir import BASEDIR
 from opendbc.car.common.conversions import Conversions as CV
-from opendbc.car.gm.radar_interface import RADAR_HEADER_MSG
-from opendbc.car.gm.values import CAR, CarControllerParams, EV_CAR, CAMERA_ACC_CAR, SDGM_CAR, ALT_ACCS, CanBus, GMPandaFlags
-from opendbc.car.interfaces import CarInterfaceBase, TorqueFromLateralAccelCallbackType, FRICTION_THRESHOLD, LatControlInputs, NanoFFModel
+from opendbc.car.gm.carcontroller import CarController
+from opendbc.car.gm.carstate import CarState
+from opendbc.car.gm.radar_interface import RadarInterface, RADAR_HEADER_MSG, CAMERA_DATA_HEADER_MSG
+from opendbc.car.gm.values import CAR, CarControllerParams, EV_CAR, CAMERA_ACC_CAR, SDGM_CAR, ALT_ACCS, CanBus, GMSafetyFlags
+from opendbc.car.interfaces import (CarInterfaceBase, TorqueFromLateralAccelCallbackType, LateralAccelFromTorqueCallbackType,
+                                    NeuralFFCallbackType, LatControlInputs, NanoFFModel)
 
 TransmissionType = structs.CarParams.TransmissionType
 NetworkLocation = structs.CarParams.NetworkLocation
@@ -18,10 +22,17 @@ NON_LINEAR_TORQUE_PARAMS = {
   CAR.CHEVROLET_SILVERADO: [3.29974374, 1.0, 0.25571356, 0.0465122]
 }
 
-NEURAL_PARAMS_PATH = os.path.join(BASEDIR, 'torque_data/neural_ff_weights.json')
+NEURAL_FF_WEIGHTS_PATH = os.path.join(BASEDIR, 'torque_data/neural_ff_weights.json')
 
 
 class CarInterface(CarInterfaceBase):
+  CarState = CarState
+  CarController = CarController
+  RadarInterface = RadarInterface
+
+  DRIVABLE_GEARS = (structs.CarState.GearShifter.sport, structs.CarState.GearShifter.low,
+                    structs.CarState.GearShifter.eco, structs.CarState.GearShifter.manumatic)
+
   @staticmethod
   def get_pid_accel_limits(CP, current_speed, cruise_speed):
     return CarControllerParams.ACCEL_MIN, CarControllerParams.ACCEL_MAX
@@ -39,47 +50,101 @@ class CarInterface(CarInterfaceBase):
     else:
       return CarInterfaceBase.get_steer_feedforward_default
 
-  def torque_from_lateral_accel_siglin(self, latcontrol_inputs: LatControlInputs, torque_params: structs.CarParams.LateralTorqueTuning,
-                                       lateral_accel_error: float, lateral_accel_deadzone: float, friction_compensation: bool, gravity_adjusted: bool) -> float:
-    friction = get_friction(lateral_accel_error, lateral_accel_deadzone, FRICTION_THRESHOLD, torque_params, friction_compensation)
+  def get_lataccel_torque_siglin(self) -> tuple[list[float], np.ndarray]:
 
-    def sig(val):
-      # https://timvieira.github.io/blog/post/2014/02/11/exp-normalize-trick
-      if val >= 0:
-        return 1 / (1 + exp(-val)) - 0.5
-      else:
-        z = exp(val)
-        return z / (1 + z) - 0.5
+    def torque_from_lateral_accel_siglin_func(lateral_acceleration: float) -> float:
+      # The "lat_accel vs torque" relationship is assumed to be the sum of "sigmoid + linear" curves
+      # An important thing to consider is that the slope at 0 should be > 0 (ideally >1)
+      # This has big effect on the stability about 0 (noise when going straight)
+      non_linear_torque_params = NON_LINEAR_TORQUE_PARAMS.get(self.CP.carFingerprint)
+      assert non_linear_torque_params, "The params are not defined"
+      a, b, c, d = non_linear_torque_params
+      sig_input = a * lateral_acceleration
+      sig = np.sign(sig_input) * (1 / (1 + exp(-fabs(sig_input))) - 0.5)
+      steer_torque = (sig * b) + (lateral_acceleration * c) + d
+      return float(steer_torque)
 
-    # The "lat_accel vs torque" relationship is assumed to be the sum of "sigmoid + linear" curves
-    # An important thing to consider is that the slope at 0 should be > 0 (ideally >1)
-    # This has big effect on the stability about 0 (noise when going straight)
-    # ToDo: To generalize to other GMs, explore tanh function as the nonlinear
-    non_linear_torque_params = NON_LINEAR_TORQUE_PARAMS.get(self.CP.carFingerprint)
-    assert non_linear_torque_params, "The params are not defined"
-    a, b, c, _ = non_linear_torque_params
-    steer_torque = (sig(latcontrol_inputs.lateral_acceleration * a) * b) + (latcontrol_inputs.lateral_acceleration * c)
-    return float(steer_torque) + friction
-
-  def torque_from_lateral_accel_neural(self, latcontrol_inputs: LatControlInputs, torque_params: structs.CarParams.LateralTorqueTuning,
-                                       lateral_accel_error: float, lateral_accel_deadzone: float, friction_compensation: bool, gravity_adjusted: bool) -> float:
-    friction = get_friction(lateral_accel_error, lateral_accel_deadzone, FRICTION_THRESHOLD, torque_params, friction_compensation)
-    inputs = list(latcontrol_inputs)
-    if gravity_adjusted:
-      inputs[0] += inputs[1]
-    return float(self.neural_ff_model.predict(inputs)) + friction
+    lataccel_values = np.arange(-5.0, 5.0, 0.01)
+    torque_values = [torque_from_lateral_accel_siglin_func(x) for x in lataccel_values]
+    assert min(torque_values) < -1 and max(torque_values) > 1, "The torque values should cover the range [-1, 1]"
+    return torque_values, lataccel_values
 
   def torque_from_lateral_accel(self) -> TorqueFromLateralAccelCallbackType:
-    if self.CP.carFingerprint == CAR.CHEVROLET_BOLT_EUV:
-      self.neural_ff_model = NanoFFModel(NEURAL_PARAMS_PATH, self.CP.carFingerprint)
-      return self.torque_from_lateral_accel_neural
-    elif self.CP.carFingerprint in NON_LINEAR_TORQUE_PARAMS:
-      return self.torque_from_lateral_accel_siglin
+    if self.CP.carFingerprint in NON_LINEAR_TORQUE_PARAMS:
+      torque_values, lataccel_values = self.get_lataccel_torque_siglin()
+
+      def torque_from_lateral_accel_siglin(lateral_acceleration: float, torque_params: structs.CarParams.LateralTorqueTuning):
+        return np.interp(lateral_acceleration, lataccel_values, torque_values)
+      return torque_from_lateral_accel_siglin
     else:
       return self.torque_from_lateral_accel_linear
 
+  def lateral_accel_from_torque(self) -> LateralAccelFromTorqueCallbackType:
+    if self.CP.carFingerprint in NON_LINEAR_TORQUE_PARAMS:
+      torque_values, lataccel_values = self.get_lataccel_torque_siglin()
+
+      def lateral_accel_from_torque_siglin(torque: float, torque_params: structs.CarParams.LateralTorqueTuning):
+        return np.interp(torque, torque_values, lataccel_values)
+      return lateral_accel_from_torque_siglin
+    else:
+      return self.lateral_accel_from_torque_linear
+
+  def torque_from_lateral_accel_neural_fn(self) -> NeuralFFCallbackType | None:
+    # Opt-in only (see CarInterfaceBase.torque_from_lateral_accel_neural_fn's docstring) -
+    # does not change torque_from_lateral_accel()/lateral_accel_from_torque() above, which
+    # keep using the siglin curve for Bolt EUV exactly as before. Ported from dev/EDP10;
+    # real trained weights in opendbc/car/torque_data/neural_ff_weights.json, copied
+    # verbatim (not a placeholder).
+    if self.CP.carFingerprint != CAR.CHEVROLET_BOLT_EUV:
+      return None
+    if getattr(self, '_neural_ff_model', None) is None:
+      self._neural_ff_model = NanoFFModel(NEURAL_FF_WEIGHTS_PATH, self.CP.carFingerprint)
+
+    def torque_from_lateral_accel_neural(latcontrol_inputs: LatControlInputs, torque_params: structs.CarParams.LateralTorqueTuning,
+                                         gravity_adjusted: bool) -> float:
+      inputs = list(latcontrol_inputs)
+      if gravity_adjusted:
+        inputs[0] += inputs[1]
+      return float(self._neural_ff_model.predict(inputs))
+    return torque_from_lateral_accel_neural
+
+  def torque_from_lateral_accel_legacy_siglin_fn(self) -> NeuralFFCallbackType | None:
+    # Opt-in only, same pattern as torque_from_lateral_accel_neural_fn above - does not
+    # change torque_from_lateral_accel()/lateral_accel_from_torque(), which keep using the
+    # current siglin curve (with the `d` constant-offset term) for GMC_ACADIA/
+    # CHEVROLET_SILVERADO exactly as before.
+    #
+    # This exists for consumers migrating from a pre-comma.ai-PR#2528 codebase (e.g.
+    # dev/EDP10) that need to preserve their exact current Acadia/Silverado steering output
+    # during that migration, not adopt this fork's current formula as a side effect of an
+    # unrelated change. comma.ai merged "Torque controller: refactor calculations to be in
+    # accel space" (74bfaa2c, 2025-08-15) - the LatControlInputs-based calling convention
+    # this fork uses today, which drops the `d` term - then reverted it three days later
+    # (4e50498a, 2025-08-18, no stated reason). This fork's current behavior (2-arg API,
+    # `d` term included) is therefore comma.ai's own considered, currently-supported design;
+    # dropping `d` (what this function reproduces) is what a pre-revert, orphaned copy of
+    # #2528 does, not this fork's normal behavior. A consumer should only reach for this if
+    # it has real deployed vehicles depending on the pre-revert formula and has not yet made
+    # an informed decision to move off it - not as a default.
+    if self.CP.carFingerprint not in (CAR.GMC_ACADIA, CAR.CHEVROLET_SILVERADO):
+      return None
+
+    def torque_from_lateral_accel_legacy_siglin(latcontrol_inputs: LatControlInputs, torque_params: structs.CarParams.LateralTorqueTuning,
+                                                gravity_adjusted: bool) -> float:
+      def sig(val):
+        if val >= 0:
+          return 1 / (1 + exp(-val)) - 0.5
+        else:
+          z = exp(val)
+          return z / (1 + z) - 0.5
+      non_linear_torque_params = NON_LINEAR_TORQUE_PARAMS.get(self.CP.carFingerprint)
+      a, b, c, _ = non_linear_torque_params  # `d` deliberately discarded - matches the orphaned pre-revert formula
+      lat_accel = latcontrol_inputs.lateral_acceleration
+      return float((sig(lat_accel * a) * b) + (lat_accel * c))
+    return torque_from_lateral_accel_legacy_siglin
+
   @staticmethod
-  def _get_params(ret: structs.CarParams, candidate, fingerprint, car_fw, experimental_long, docs) -> structs.CarParams:
+  def _get_params(ret: structs.CarParams, candidate, fingerprint, car_fw, alpha_long, is_release, docs) -> structs.CarParams:
     ret.brand = "gm"
     ret.safetyConfigs = [get_safety_config(structs.CarParams.SafetyModel.gm)]
     ret.autoResumeSng = False
@@ -87,40 +152,39 @@ class CarInterface(CarInterfaceBase):
 
     if candidate in EV_CAR:
       ret.transmissionType = TransmissionType.direct
+      ret.safetyConfigs[0].safetyParam |= GMSafetyFlags.EV.value
     else:
       ret.transmissionType = TransmissionType.automatic
 
     ret.longitudinalTuning.kiBP = [5., 35.]
 
     if candidate in (CAMERA_ACC_CAR | SDGM_CAR):
-      ret.experimentalLongitudinalAvailable = candidate not in SDGM_CAR
+      ret.alphaLongitudinalAvailable = candidate not in SDGM_CAR
       ret.networkLocation = NetworkLocation.fwdCamera
       ret.radarUnavailable = True  # no radar
       ret.pcmCruise = True
-      ret.safetyConfigs[0].safetyParam |= GMPandaFlags.FLAG_GM_HW_CAM.value
+      ret.safetyConfigs[0].safetyParam |= GMSafetyFlags.HW_CAM.value
       ret.minEnableSpeed = -1 if candidate in SDGM_CAR else 5 * CV.KPH_TO_MS
       ret.minSteerSpeed = 10 * CV.KPH_TO_MS
 
       # Tuning for experimental long
       ret.longitudinalTuning.kiV = [2.0, 1.5]
-      ret.stoppingDecelRate = 2.0  # reach brake quickly after enabling
-      ret.vEgoStopping = 0.25
-      ret.vEgoStarting = 0.25
 
-      if experimental_long:
+      if alpha_long:
         ret.pcmCruise = False
         ret.openpilotLongitudinalControl = True
-        ret.safetyConfigs[0].safetyParam |= GMPandaFlags.FLAG_GM_HW_CAM_LONG.value
+        ret.safetyConfigs[0].safetyParam |= GMSafetyFlags.HW_CAM_LONG.value
 
       if candidate in ALT_ACCS:
-        ret.experimentalLongitudinalAvailable = False
+        ret.alphaLongitudinalAvailable = False
         ret.openpilotLongitudinalControl = False
         ret.minEnableSpeed = -1.  # engage speed is decided by PCM
 
     else:  # ASCM, OBD-II harness
       ret.openpilotLongitudinalControl = True
       ret.networkLocation = NetworkLocation.gateway
-      ret.radarUnavailable = RADAR_HEADER_MSG not in fingerprint[CanBus.OBSTACLE] and not docs
+      # LRR messages can take up to a few seconds to start sending after ignition, check camera data as well which starts earlier
+      ret.radarUnavailable = RADAR_HEADER_MSG not in fingerprint[CanBus.OBSTACLE] and CAMERA_DATA_HEADER_MSG not in fingerprint[CanBus.OBSTACLE] and not docs
       ret.pcmCruise = False  # stock non-adaptive cruise control is kept off
       # supports stop and go, but initial engage must (conservatively) be above 18mph
       ret.minEnableSpeed = 18 * CV.MPH_TO_MS
