@@ -1,5 +1,11 @@
 # BYD Atto 3 / GWM Haval H6 — community port crosscheck
 
+**See also:** [`REFER_SOURCE_CROSSCHECK.md`](REFER_SOURCE_CROSSCHECK.md)
+(2026-09-13) — a separate, unattributed batch of BYD/Geely source and DBC
+dumps (`~/panda/REFER`), checked the same way as the lineages below. Same
+"scaffold with no real capture" failure mode recurs there (Geely), plus a
+DRM phone-home finding not present in any lineage documented here.
+
 **Date:** 2026-08-17. **Scope:** cross-check the claim that `opendbc-data` and
 `openpilot` community forks "successfully ported" BYD Atto 3 and GWM Haval H6,
 against this fork's own BYD Atto 3 work (`opendbc/car/byd/`,

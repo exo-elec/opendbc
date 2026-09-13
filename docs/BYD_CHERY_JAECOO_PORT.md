@@ -1,5 +1,10 @@
 # BYD / Chery (Omoda, iCAUR, JAECOO) / MG car port
 
+**See also:** [`REFER_SOURCE_CROSSCHECK.md`](REFER_SOURCE_CROSSCHECK.md) —
+crosschecks an unattributed batch of BYD/Geely source and DBC dumps
+(`~/panda/REFER`) against this doc's `car/byd/`, including a DRM phone-home
+finding in one sub-bundle.
+
 **Status:** lives on branch `port/upstream-bump-byd-chery-jaecoo`
 ([PR #1](https://github.com/exo-electronics/opendbc/pull/1)), not merged to
 `master`. The `dev/EOP10` submodule pin (`opendbc_repo@2cde2462`) is
