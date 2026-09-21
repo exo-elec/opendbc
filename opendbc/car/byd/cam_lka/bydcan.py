@@ -2,6 +2,11 @@ import random
 
 from opendbc.car import rate_limit
 
+# ACC_CMD.ACCEL_CMD clip, m/s^2. These are the same wire values the previous raw-count
+# clip produced (raw 130 and raw 20) under the DBC's 0.05/-5 scaling.
+ACCEL_CMD_MAX = 1.5
+ACCEL_CMD_MIN = -4.0
+
 SPOOF_TARGET_MIN = 5.0
 SPOOF_TARGET_VARIATION_MIN = 4.0
 SPOOF_TARGET_NEGATIVE_PROB = 0.3
@@ -30,8 +35,15 @@ def create_can_steer_command(packer, steer_angle, steer_req, is_standstill, ecu_
   eps_ok = not steer_req
   if recovery_btn:
     eps_ok = ecu_fault
-  # BYD panda safety expects a neutral steering command when steering is inactive.
-  steer_angle_cmd = steer_angle if steer_req else 0
+  # The inactive command tracks the measured angle, which the caller already passes in
+  # (carcontroller sets apply_angle = CS.out.steeringAngleDeg whenever steer_req is false).
+  # It used to be forced to 0 here, described as "BYD panda safety expects a neutral
+  # steering command when steering is inactive" - the opposite of what this fork does:
+  # steer_angle_cmd_inactive_check() requires the inactive command to stay inside
+  # [angle_meas.min - 1, angle_meas.max + 1], so a 0 was a violation on any off-centre
+  # wheel, and lateral.py's apply_std_steer_angle_limits() sets the inactive angle to the
+  # measured angle "on all angle cars" for the same reason.
+  steer_angle_cmd = steer_angle
   values = {
     "STEER_REQ": steer_req,
     # to recover from ecu fault, it must be momentarily pulled low.
@@ -51,8 +63,17 @@ def create_can_steer_command(packer, steer_angle, steer_req, is_standstill, ecu_
   return packer.make_can_msg("STEERING_MODULE_ADAS", 0, values)
 
 
-def create_accel_command(packer, accel, enabled, accel_mult, brake_hold):
-  accel = max(min(accel * accel_mult, 30.0), -80.0)
+def create_accel_command(packer, accel, enabled, brake_hold):
+  # accel is m/s^2 and ACCEL_CMD now carries the same unit: byd_general_pt.dbc gives it
+  # factor 0.05, offset -5, matching byd_atto3.dbc's capture-derived MPC_AccelerationCmd.
+  # This used to be `accel * ACCEL_MULT` (26 for Atto 3 / M6 / Seal 6) against a raw
+  # (1, -100) DBC, which put 1.30x the requested acceleration on the wire. The clip is
+  # unchanged in raw terms - raw 20..130 either way, so the authority envelope and the
+  # byd.h limits below it are untouched - but the mapping inside it is now 1:1.
+  # Evidence for 0.05: the old +30 raw-count clip lands on exactly +1.50 m/s^2, the
+  # ceiling BYD_Atto3's COMMA-device captures recorded, and -80 lands on exactly -4.00.
+  # See docs/BYD_ATTO3_QZWF_REFERENCE_PORT.md. Bench-validate before hardware use.
+  accel = max(min(accel, ACCEL_CMD_MAX), ACCEL_CMD_MIN)
   accel_factor = 12 if accel >= 2 else 5 if accel < 0 else 11
   enabled &= not brake_hold
 

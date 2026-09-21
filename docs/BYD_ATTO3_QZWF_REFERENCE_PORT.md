@@ -245,31 +245,86 @@ has, and it says our commands are 30% high.
 - **Vehicle specs.** Wheelbase agrees (2.72). Mass 2090 (ours) vs 1750 (theirs); steer ratio
   16.0 vs 14.8; they also set `tireStiffnessFactor = 0.7983`, we leave it default.
 
-## Suggested adoption order
+## Resolution status (2026-09-21)
 
-Cheap and safe first; nothing here is a blind copy — their car is India-market and lateral-only.
+Everything with enough evidence to act on has been applied on this branch. Everything
+that needs a capture is annotated in the DBC where an engineer will hit it, rather than
+guessed at.
 
-1. **Swap `steeringTorque` / `steeringTorqueEps`** in `cam_lka/carstate.py`. One line, three
-   independent sources, no capture needed.
-2. **Fix the duplicated button bit in `byd.h`** (audit finding 6) — unrelated to qzwf but in
-   the same file and equally self-contained.
-3. **Adopt `MAX_ANGLE_ERROR`-style windup clamping** in `cam_lka/carcontroller.py`, then bring
-   the `byd.h` angle-rate lookup back down to match `values.py`. Fixing the cause is what lets
-   the backstop be real.
-4. **Stop transmitting `0x1E2`/`0x316` when not steering**, and move to their
-   `disable_static_blocking` + takeover-timeout blocking model. This removes the inactive-frame
-   encoding problem instead of solving it.
-5. **Latch the steering template from the camera** rather than hardcoding it, and drop the
-   `0xE`-at-standstill variant unless a local capture shows this car does that.
-6. **Re-examine the wheel-speed source and scale.** Move to `0x122`, and settle the scale
-   between their 40/53×0.1 and `byd_atto3.dbc`'s 1/14 against a local GPS or odometer run.
-   Fix `WHEELSPEED_BR` in `byd_general_pt.dbc` while there.
-7. **Turn on the Rx counter/checksum checks** we already have the algorithm for.
-8. **Longitudinal accel scale** — still needs a car. Nobody has measured it; the BYD_Atto3
-   capture evidence is the best we have and it disagrees with what we ship.
+### Fixed
 
-Items 4–6 change control behaviour and, per `BYD_Atto3/DOC/community_port_comparison.md`, any
-change to `0x1E2` or `0x32E` needs an independent safety review and bench validation first.
+| # | What | Where |
+| --- | --- | --- |
+| 1 | `steeringTorque` / `steeringTorqueEps` swapped | `cam_lka/carstate.py` |
+| 2 | `create_steering_torque_spoof_camera` fed the wrong signal after (1) | `cam_lka/carcontroller.py` |
+| 3 | `ACCEL_CMD` scale: DBC now carries 0.05/-5, `ACCEL_MULT` removed | `byd_general_pt.dbc`, `cam_lka/bydcan.py`, `values.py`, `cam_lka/carcontroller.py` |
+| 4 | Inactive `0x1E2` transmitted angle 0 instead of the measured angle | `cam_lka/bydcan.py` |
+| 5 | `acc_pressed` and `cancel_pressed` read the same bit | `safety/modes/byd.h` |
+| 6 | `max_angle` 450 (45°) vs `STEER_ANGLE_MAX` 120° | `safety/modes/byd.h` |
+| 7 | `bl_raw` actually reads `WHEELSPEED_FR` | `safety/modes/byd.h` |
+| 8 | No BYD test coverage for any of the above | `car/byd/tests/test_protocol_consistency.py` (12 tests) |
+
+Notes on the ones that aren't cosmetic:
+
+- **(1)** `mpc_lka/carstate.py` already had it right, so this was an inconsistency inside
+  this fork as well as against the other two lineages. `steeringPressed` already read the
+  driver signal and keeps its threshold of 6, so override sensitivity is unchanged. The
+  Seal 6 override block was reading the EPS motor value through `CS.out.steeringTorque`
+  and now reads it through `steeringTorqueEps` — same signal, same thresholds, so Seal 6
+  behaviour is unchanged. Moving it onto real driver torque needs those two thresholds
+  re-tuned on a car.
+- **(3)** The raw TX envelope is unchanged — raw 20..130 before and after — so the
+  `byd.h` longitudinal limits and the authority they allow are untouched. What changed is
+  the mapping inside it, from 1.30× to 1:1. `ACCEL_MULT` was a units conversion standing
+  in for a DBC scale, with no stated derivation for its value; the DBC now describes
+  itself. **Still needs bench validation before hardware use.**
+- **(4)** `apply_std_steer_angle_limits()` in `car/lateral.py` sets the inactive angle to
+  the measured angle "on all angle cars", and `steer_angle_cmd_inactive_check()` requires
+  it — the carcontroller was already passing the measured angle in and `bydcan` was
+  overwriting it with 0.
+- **(5)** Behaviour-preserving: the grant ran first and the clear second on the same bit,
+  so that bit could never leave `controls_allowed` set, and it still cannot. What it
+  removes is a dead grant term that read as though ACC_ON_BTN engaged control.
+- **(6)** `max_angle` bounds the inactive-angle window and the post-violation reset of
+  `desired_angle_last`, not the active command. At 450 the reset landed up to 75° away
+  from the angle being commanded whenever the wheel was past 45°, which is the
+  burst-blocking `byd.h`'s own comment describes. The active command is bounded by the
+  rate lookup and, in the controller, by `MAX_STEER_ANGLE_OFFSET_DEG = 10`.
+
+**Correction to an earlier draft of this document:** it recommended adopting a
+qzwf-style windup clamp. This fork already has one — `MAX_STEER_ANGLE_OFFSET_DEG = 10`
+in `cam_lka/carcontroller.py`, clamping the command to ±10° of measured, against qzwf's
+±12°. The burst-blocking cause was `max_angle`, fixed above, not a missing clamp.
+
+### Deliberately not changed, annotated instead
+
+Each of these is now a `CM_` comment in the DBC that owns the signal, so it surfaces in
+cabana and in any tool that reads the file:
+
+| What | Why not | Annotated in |
+| --- | --- | --- |
+| `0x1F0` structure and scale | Two lineages say one 16-bit field; two scales disagree by 30%. Needs a local GPS or odometer run. Affects `vEgo` and the speed the angle-rate lookup interpolates against. | `byd_general_pt.dbc` `CM_ BO_ 496` |
+| `0x1E2` bit 20 (`EPS_OK`) | qzwf measured the camera holding it at 0 in both states; this fork drives it as `not steer_req`. BYD_Atto3 has the captures to settle it. | `byd_general_pt.dbc` `CM_ SG_ 482 EPS_OK` (pre-existing, still accurate), `byd_atto3.dbc` `CM_ SG_ 482 MPC_SteerRequestActiveLow` |
+| `0x1E2` `SET_ME_XE = 0xE` at standstill | qzwf measured `0xB` at every speed over 1111 frames. Changing the steering template without a local capture is the exact failure mode they documented. | `byd_general_pt.dbc` `CM_ SG_ 482 UNKNOWN` |
+| `0x316` `SET_ME_XFF` sitting on `LKAS_Output` | Two lineages place a signed 11-bit torque there; qzwf's own `0x316` defines nothing in that region, so nothing corroborates or refutes it. | `byd_general_pt.dbc` `CM_ SG_ 790 SET_ME_XFF` |
+| `0x122` `WHEELSPEED_BR` width | qzwf measured byte 7 as a constant 0x41, but the real width is unknown and nothing in this fork reads the frame. | `byd_general_pt.dbc` `CM_ SG_ 290 WHEELSPEED_BR` |
+| `0x1FC` torque position in `byd_atto3.dbc` | Per that repo's own policy, disputed fields are annotated and left in place until a local BLF/MF4 decode. | `byd_atto3.dbc` `CM_ SG_ 508 EPS_MainTorque` |
+| Angle rate lookup (28/26/22 vs 6/4/3) | Tightening the C backstop toward `values.py` is the right direction but changes control behaviour under load. Wants a bench run, not an argument. | `byd.h` comment |
+| `steeringPressed` threshold (6 / 10 / 80) | Raising it makes override detection *less* sensitive. Not a change to make from another market's car. | `cam_lka/carstate.py` `STEER_DRIVER_TORQUE_THRESHOLD` |
+
+### Still open everywhere
+
+The `0x32E` longitudinal scale has no on-car measurement in any of the three lineages.
+This fork now ships the only value with evidence behind it (BYD_Atto3's captures), which
+is a better position than an underived 26, but it is not a measurement made through this
+port. **Bench-validate longitudinal before hardware use.**
+
+### Verification
+
+`opendbc`: 4197 tests pass (`unittest discover -s opendbc`), including the 12 new ones in
+`car/byd/tests/test_protocol_consistency.py` and the 3372-test safety suite that compiles
+`byd.h`. `ruff check .` reports one pre-existing error in `car/__init__.py`, unrelated and
+present before these changes.
 
 ## Things that do not transfer
 

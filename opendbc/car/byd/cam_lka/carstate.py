@@ -8,6 +8,14 @@ from opendbc.car.byd.values import DBC, CANBUS, HUD_MULTIPLIER, CAR, BYD_OP_LONG
 
 ButtonType = structs.CarState.ButtonEvent.Type
 
+# Raw count on STEER_MODULE_2.DRIVER_EPS_TORQUE (0x11F byte 2, unsigned 0-255).
+# Unchanged from the value this port shipped with. qzwf/opendbc uses 80 on an
+# India-market car ("observed max ~52 during normal turns") and
+# byd_atto3.dbc's CM_ SG_ 287 records a third value (10) with a warning that the
+# count-to-effort mapping is not proven portable; raising this would make override
+# detection less sensitive, so it stays until a local capture settles it.
+STEER_DRIVER_TORQUE_THRESHOLD = 6
+
 class CarState(CarStateBase):
   def __init__(self, CP):
     super().__init__(CP)
@@ -99,9 +107,16 @@ class CarState(CarStateBase):
     ret.steeringAngleDeg = cp.vl["STEER_MODULE_2"]["STEER_ANGLE_2"]
     steer_dir = 1 if (ret.steeringAngleDeg - self.prev_angle >= 0) else -1
     self.prev_angle = ret.steeringAngleDeg
-    ret.steeringTorque = cp.vl["STEERING_TORQUE"]["MAIN_TORQUE"]
-    ret.steeringTorqueEps = cp.vl["STEER_MODULE_2"]["DRIVER_EPS_TORQUE"] * steer_dir
-    ret.steeringPressed = bool(abs(ret.steeringTorqueEps) > 6)
+    # car.capnp: steeringTorque is DRIVER input, steeringTorqueEps is the EPS motor value.
+    # STEER_MODULE_2.DRIVER_EPS_TORQUE (0x11F byte 2) is the column torque sensor;
+    # STEERING_TORQUE.MAIN_TORQUE (0x1FC) is total EPS motor output, NOT driver input.
+    # Confirmed by three independent lineages - see docs/BYD_ATTO3_QZWF_REFERENCE_PORT.md
+    # and byd_atto3.dbc's CM_ SG_ 508 EPS_MainTorque. These two were assigned the other
+    # way round until 2026-09-21; steeringPressed already read the driver signal and
+    # keeps the same threshold, so override sensitivity is unchanged.
+    ret.steeringTorque = cp.vl["STEER_MODULE_2"]["DRIVER_EPS_TORQUE"] * steer_dir
+    ret.steeringTorqueEps = cp.vl["STEERING_TORQUE"]["MAIN_TORQUE"]
+    ret.steeringPressed = bool(abs(ret.steeringTorque) > STEER_DRIVER_TORQUE_THRESHOLD)
 
     ret.stockAeb = False
     ret.stockFcw = False

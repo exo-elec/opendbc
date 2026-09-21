@@ -10,7 +10,7 @@ from opendbc.car.byd.cam_lka.bydcan import (
   create_steering_torque_spoof_camera,
   send_buttons,
 )
-from opendbc.car.byd.values import DBC, CAR, ACCEL_MULT, CANBUS, BYD_ATTO_STYLE_PLATFORMS, BYD_OP_LONG_PLATFORMS
+from opendbc.car.byd.values import DBC, CAR, CANBUS, BYD_ATTO_STYLE_PLATFORMS, BYD_OP_LONG_PLATFORMS
 from opendbc.car.byd.values import CarControllerParams
 from opendbc.car.interfaces import CarControllerBase
 from opendbc.car.lateral import apply_std_steer_angle_limits
@@ -49,7 +49,6 @@ class CarController(CarControllerBase):
 
     self.lka_active = False
     self.last_apply_angle = 0
-    self.accel_mult = ACCEL_MULT[CP.carFingerprint]
     self.lka_cooldown = 0
     self.prev_press = False
     self.prev_res_press = False
@@ -143,7 +142,13 @@ class CarController(CarControllerBase):
     lat_active = (self.lka_cooldown > LKA_COOLDOWN_MIN_FRAMES) and enabled and self.lka_active and not CS.out.standstill
     steer_req = lat_active
     if self.CP.carFingerprint == CAR.BYD_SEAL6 and SEAL6_DRIVER_OVERRIDE_ENABLED:
-      driver_torque = abs(CS.out.steeringTorque)
+      # NOTE: this reads the EPS motor output (0x1FC MAIN_TORQUE, x0.1 Nm) because that is
+      # the signal SEAL6_OVERRIDE_ENTER_NM/EXIT_NM were tuned against - it reached here as
+      # CS.out.steeringTorque until the 2026-09-21 fix that put the driver column sensor in
+      # that field, per car.capnp. Kept on the same signal so Seal 6 override behaviour is
+      # unchanged; moving it to CS.out.steeringTorque (raw 0-255 column counts) needs the
+      # two thresholds re-tuned on a car first.
+      driver_torque = abs(CS.out.steeringTorqueEps)
       if not lat_active:
         self.seal6_steer_override = False
         self.seal6_override_clear = 0
@@ -222,7 +227,7 @@ class CarController(CarControllerBase):
         if self.CP.carFingerprint in BYD_OP_LONG_PLATFORMS and self.CP.openpilotLongitudinalControl:
           long_active = CC.enabled and not CS.out.gasPressed
           brake_hold = CS.out.standstill and actuators.accel < 0
-          can_sends.append(create_accel_command(self.packer, actuators.accel, long_active, self.accel_mult, brake_hold))
+          can_sends.append(create_accel_command(self.packer, actuators.accel, long_active, brake_hold))
         else:
           if CS.out.standstill and CC.enabled and (self.frame % BUTTON_KEEPALIVE_FRAMES == 0):
             can_sends.append(send_buttons(self.packer, 1, 0, self.button_send_bus))
@@ -242,7 +247,7 @@ class CarController(CarControllerBase):
 
       if send_spoof:
         can_sends.append(
-          create_steering_torque_spoof_camera(self.packer, lat_active, CS.out.steeringTorque, spoof_active)
+          create_steering_torque_spoof_camera(self.packer, lat_active, CS.out.steeringTorqueEps, spoof_active)
         )
 
     if pcm_cancel_cmd:

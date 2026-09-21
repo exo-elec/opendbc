@@ -1,4 +1,3 @@
-from collections import defaultdict
 from dataclasses import dataclass, field
 from enum import Enum, IntEnum, IntFlag
 
@@ -186,17 +185,11 @@ BYD_OP_LONG_PLATFORMS = (
 )
 
 DBC = CAR.create_dbc_map()
-ACCEL_MULT = defaultdict(
-  lambda: 1,
-  {
-    CAR.BYD_ATTO3: 26,
-    CAR.BYD_M6: 26,
-    CAR.BYD_SEAL: 1,
-    CAR.BYD_SEALION7: 1,
-    CAR.BYD_SEAL6: 26,
-    CAR.BYD_SHARK: 1,
-  },
-)
+# ACCEL_MULT (26 for the op-long platforms, 1 elsewhere) lived here until 2026-09-21. It
+# was a units conversion standing in for a DBC scale, and the value had no stated
+# derivation; byd_general_pt.dbc's ACCEL_CMD now carries the capture-derived 0.05/-5
+# itself, so create_accel_command() passes m/s^2 straight through with no per-car trim.
+# Only the three BYD_OP_LONG_PLATFORMS ever reached that code path.
 HUD_MULTIPLIER = 1.12
 
 

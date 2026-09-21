@@ -38,11 +38,20 @@ static void byd_rx_hook(const CANPacket_t *msg) {
     }
 
     if (addr == 496) {
+      // byd_general_pt.dbc WHEEL_SPEED: FL 0|12, FR 16|12 (BL is 28|12, BR 40|12).
+      // The second field read here is FR, not BL - it was named bl_raw until 2026-09-21.
+      // Averaging the two fronts is the same speed estimate either way; only the name
+      // was wrong, and it hid the fact that no rear wheel is read.
+      // NOTE: the 0.1 factor is byd_general_pt.dbc's and is disputed. byd_atto3.dbc decodes
+      // this frame as one 16-bit value at 1/14 km/h per count from local captures, and
+      // qzwf/opendbc corrects a 0.1 factor by 40/53 after measuring raw values ~32.5% high
+      // against the odometer. Both land near 0.072-0.075. Unresolved pending a local GPS or
+      // odometer run - see docs/BYD_ATTO3_QZWF_REFERENCE_PORT.md.
       uint16_t fl_raw = (uint16_t)(((msg->data[1] & 0x0FU) << 8U) | msg->data[0]);
-      uint16_t bl_raw = (uint16_t)(((msg->data[3] & 0x0FU) << 8U) | msg->data[2]);
+      uint16_t fr_raw = (uint16_t)(((msg->data[3] & 0x0FU) << 8U) | msg->data[2]);
       float fl_ms = ((float)fl_raw) * 0.1f * (1.0f / 3.6f);
-      float bl_ms = ((float)bl_raw) * 0.1f * (1.0f / 3.6f);
-      float speed = (fl_ms + bl_ms) * 0.5f;
+      float fr_ms = ((float)fr_raw) * 0.1f * (1.0f / 3.6f);
+      float speed = (fl_ms + fr_ms) * 0.5f;
       vehicle_moving = SAFETY_ABS(speed) > 0.1f;
       UPDATE_VEHICLE_SPEED(speed);
     }
@@ -54,13 +63,20 @@ static void byd_rx_hook(const CANPacket_t *msg) {
     }
 
     if (addr == 944) {
+      // PCM_BUTTONS bit numbering per byd_general_pt.dbc, matched field for field by
+      // qzwf/opendbc: SET_BTN @3, RES_BTN @4, LKAS_ON_BTN @6, ACC_ON_BTN @19.
       bool set_pressed = (((msg->data[0] >> 3U) & 1U) != 0U);
       bool res_pressed = (((msg->data[0] >> 4U) & 1U) != 0U);
       bool icc_pressed = (((msg->data[0] >> 6U) & 1U) != 0U);
-      bool acc_pressed = (((msg->data[2] >> 3U) & 1U) != 0U);
+      // ACC_ON_BTN (bit 19) is this mode's cancel - send_buttons() transmits cancel through
+      // it. Until 2026-09-21 this same bit was also read as acc_pressed into the grant
+      // below, so setting it granted controls_allowed and then immediately cleared it on
+      // the same frame, taking any simultaneous SET/RES/ICC press with it. Reading it once
+      // as cancel is exactly what the two reads together already did: this bit could never
+      // leave controls_allowed set, and it still cannot.
       bool cancel_pressed = (((msg->data[2] >> 3U) & 1U) != 0U);
 
-      if (set_pressed || res_pressed || icc_pressed || acc_pressed) {
+      if (set_pressed || res_pressed || icc_pressed) {
         controls_allowed = true;
       }
       if (cancel_pressed) {
@@ -141,7 +157,18 @@ static bool byd_tx_hook(const CANPacket_t *msg) {
     // inactive commanded angle to track angle_meas, which is the stricter of the two options, not
     // a weaker one. No behavior change versus the source config.
     static const AngleSteeringLimits BYD_STEERING_LIMITS = {
-      .max_angle = 450,
+      // 1200 CAN units = 120.0 deg, matching values.py CarControllerParams.STEER_ANGLE_MAX
+      // and the 120 deg advertised in the car docs. It read 450 (45 deg) until 2026-09-21,
+      // agreeing with neither. max_angle does not bound the active command - it bounds the
+      // inactive-angle window and the post-violation reset of desired_angle_last - so the
+      // old value was itself a cause of the burst-blocking described above: with the wheel
+      // past 45 deg the reset landed 55+ deg from the angle actually being commanded and
+      // the following frame violated again. The active command is bounded by the rate
+      // lookup below and, in the controller, by MAX_STEER_ANGLE_OFFSET_DEG, which clamps
+      // it to 10 deg either side of the measured angle.
+      // qzwf/opendbc uses 900 (90 deg) with "the EPS faults past this" on an India-market
+      // car. If that holds here, this, values.py and the car docs should move together.
+      .max_angle = 1200,
       .angle_deg_to_can = 10,
       .angle_rate_up_lookup = {{0., 5., 15.}, {28., 26., 22.}},
       .angle_rate_down_lookup = {{0., 5., 15.}, {28., 26., 22.}},
@@ -157,7 +184,10 @@ static bool byd_tx_hook(const CANPacket_t *msg) {
     if (byd_stock_long) {
       return false;
     }
-    // ACCEL_CMD raw byte; DBC physical = raw - 100. Stock logs use down to ~-80 (raw 20).
+    // ACCEL_CMD raw byte. byd_general_pt.dbc scales it 0.05 with a -5 offset, so these raw
+    // counts are +1.75 / -4.00 m/s^2 with 0.00 inactive. Stock logs use down to raw 20.
+    // The carcontroller clips to raw 130 / raw 20 (+1.50 / -4.00 m/s^2), inside this.
+    // These are raw counts and so were unaffected by the 2026-09-21 scale correction.
     static const LongitudinalLimits BYD_LONG_LIMITS = {
       .max_accel = 135,
       .min_accel = 20,
