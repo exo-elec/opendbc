@@ -1,5 +1,21 @@
 # BYD Atto 3 / GWM Haval H6 — community port crosscheck
 
+**Superseded in part (2026-09-21):** the `qzwf/opendbc` lineage tracked below is no
+longer just a fork branch — it is upstream PR
+[commaai/opendbc#3677](https://github.com/commaai/opendbc/pull/3677) ("BYD ATTO3: new
+brand port (lateral)", draft, opened 2026-08-11), with 34 safety tests, a test route, and
+daily driving on a comma 3X behind it. Its code was read in full and diffed against
+`opendbc/car/byd/`, `byd_general_pt.dbc` and `BYD_Atto3/DBC/byd_atto3.dbc`; that diff and
+the changes it drove are in
+[`BYD_ATTO3_QZWF_REFERENCE_PORT.md`](BYD_ATTO3_QZWF_REFERENCE_PORT.md). Where this
+document and that one disagree about a signal, that one is newer.
+
+Two corrections it makes to claims below: the `MAIN_TORQUE` semantic finding
+(`CM_ SG_ 508`) is confirmed, but its **bit position here is not** — qzwf puts motor
+torque in bytes 0–1 at ×0.1, agreeing with `byd_general_pt.dbc`, against
+`byd_atto3.dbc`'s `32|12` ×1. And `byd_atto3.dbc`'s `0x418` BSM and `0x11F` byte-4
+decodes are contradicted by both other lineages.
+
 **See also:** [`REFER_SOURCE_CROSSCHECK.md`](REFER_SOURCE_CROSSCHECK.md)
 (2026-09-13) — a separate, unattributed batch of BYD/Geely source and DBC
 dumps (`~/panda/REFER`), checked the same way as the lineages below. Same
