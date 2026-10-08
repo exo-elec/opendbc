@@ -46,8 +46,6 @@ Using ExoPilot opendbc
 
 | Branch | Description | Use |
 |---|---|---|
-| [`claude/porting-motorola-intel-ir30b7`](https://github.com/exo-elec/opendbc/tree/claude/porting-motorola-intel-ir30b7) | Assistant development: porting motorola intel ir30b7 | Development / review |
-| [`claude/protocol-consistency-repos-y50tc7`](https://github.com/exo-elec/opendbc/tree/claude/protocol-consistency-repos-y50tc7) | Assistant development: protocol consistency repos y50tc7 | Development / review |
 | [`eop10-ngp10-v021`](https://github.com/exo-elec/opendbc/tree/eop10-ngp10-v021) | EOP10/NGP10 integration on the v0.2.1 baseline | Project variant |
 | [`master` **(this branch)**](https://github.com/exo-elec/opendbc/tree/master) | Default project branch | Project variant |
 | [`port/edp10-uradar-interface`](https://github.com/exo-elec/opendbc/tree/port/edp10-uradar-interface) | Project development: port/edp10 uradar interface | Project variant |
