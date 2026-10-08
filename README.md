@@ -1,5 +1,103 @@
 <div align="center" style="text-align: center;">
 
+<h1>ExoPilot opendbc</h1>
+
+<p><b>Vehicle interfaces and CAN database development based on comma.ai opendbc.</b></p>
+
+<h3>
+  <a href="#project-features">Features</a> ·
+  <a href="#project-branches">Branches</a> ·
+  <a href="#project-install">Install</a> ·
+  <a href="#project-details">Details</a> ·
+  <a href="#project-bug-reports">Bug reports</a>
+</h3>
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Branch](https://img.shields.io/badge/Branch-eop10--ngp10--v021-blue)](https://github.com/exo-elec/opendbc/tree/eop10-ngp10-v021)
+[![Latest commit](https://img.shields.io/github/last-commit/exo-elec/opendbc/eop10-ngp10-v021?label=Latest%20commit)](https://github.com/exo-elec/opendbc/commits/eop10-ngp10-v021)
+
+</div>
+
+------
+
+<a id="project-requirements"></a>
+
+Using ExoPilot opendbc
+------
+
+1. **Hardware and tools:** Python and the development environment described below; matching hardware for vehicle validation.
+2. **Software:** this branch, `eop10-ngp10-v021`.
+3. **Configuration:** use this branch's project settings and integration notes.
+4. **Setup:** follow *How to Install* and the detailed project guide below.
+
+<a id="project-features"></a>
+
+🌟 Highlight Features
+------
+
+- Python vehicle interfaces and CAN signal handling.
+- BrownPanda and ExoPilot integration branches.
+- Vehicle porting and protocol-development branches.
+
+<a id="project-branches"></a>
+
+🔧 Branches
+------
+
+| Branch | Description | Use |
+|---|---|---|
+| [`claude/porting-motorola-intel-ir30b7`](https://github.com/exo-elec/opendbc/tree/claude/porting-motorola-intel-ir30b7) | Assistant development: porting motorola intel ir30b7 | Development / review |
+| [`claude/protocol-consistency-repos-y50tc7`](https://github.com/exo-elec/opendbc/tree/claude/protocol-consistency-repos-y50tc7) | Assistant development: protocol consistency repos y50tc7 | Development / review |
+| [`eop10-ngp10-v021` **(this branch)**](https://github.com/exo-elec/opendbc/tree/eop10-ngp10-v021) | EOP10/NGP10 integration on the v0.2.1 baseline | Project variant |
+| [`master`](https://github.com/exo-elec/opendbc/tree/master) | Default project branch | Project variant |
+| [`port/edp10-uradar-interface`](https://github.com/exo-elec/opendbc/tree/port/edp10-uradar-interface) | Project development: port/edp10 uradar interface | Project variant |
+| [`port/tesla-brake-source-investigation`](https://github.com/exo-elec/opendbc/tree/port/tesla-brake-source-investigation) | Project development: port/tesla brake source investigation | Project variant |
+| [`port/upstream-bump-byd-chery-jaecoo`](https://github.com/exo-elec/opendbc/tree/port/upstream-bump-byd-chery-jaecoo) | Project development: port/upstream bump byd chery jaecoo | Project variant |
+
+Use the branch that matches your hardware and task. A branch name does not establish release or validation status.
+
+<a id="project-install"></a>
+
+🧰 How to Install
+------
+
+Check out this branch:
+
+```bash
+git clone --branch eop10-ngp10-v021 https://github.com/exo-elec/opendbc.git
+```
+
+Cloning only downloads the source. Complete the branch-specific build, setup or
+flashing steps under *Details* before running it.
+
+<a id="project-credits"></a>
+
+📋 Credits and Base Projects
+------
+
+- [comma.ai opendbc](https://github.com/commaai/opendbc)
+
+Branch-specific attribution, license notices and project additions are documented below.
+
+<a id="project-bug-reports"></a>
+
+🐞 Bug Reports / Feature Requests
+------
+
+Report problems to the repository maintainer through the available
+[GitHub channels](https://github.com/exo-elec/opendbc). If Issues is enabled, [open an issue](https://github.com/exo-elec/opendbc/issues).
+
+Include the branch, hardware, software/toolchain versions, steps to reproduce,
+expected behavior and what happened. Attach relevant logs or screenshots with
+credentials and personal data removed.
+
+<a id="project-details"></a>
+
+📖 Details
+------
+
+<div align="center" style="text-align: center;">
+
 <h1>opendbc</h1>
 <p>
   <b>opendbc is a Python API for your car.</b>
@@ -47,7 +145,7 @@ Everything you need to know to use, contribute, and extend opendbc are in these 
 git clone https://github.com/commaai/opendbc.git
 cd opendbc
 
-# you probably just want to use this. it's an all-in-one for dependency
+## you probably just want to use this. it's an all-in-one for dependency
 # installation, compiling, linting, and tests. it's also what runs in CI
 ./test.sh
 
